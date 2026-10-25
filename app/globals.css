@@ -1,0 +1,59 @@
+:root {
+  --ink: #18262e;
+  --muted: #5c6b73;
+  --surface: #f4f6f5;
+  --line: #dce2df;
+  --accent: #aa441b;
+  --ok: #236955;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+    "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 64px 24px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 28px;
+}
+
+h1 { font-size: 22px; margin: 0 0 6px; }
+.sub { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+.status .dot { width: 8px; height: 8px; border-radius: 999px; }
+.status.ok { color: var(--ok); }
+.status.ok .dot { background: var(--ok); }
+.status.ng { color: var(--accent); }
+.status.ng .dot { background: var(--accent); }
+
+ul.notes { list-style: none; padding: 0; margin: 20px 0 0; }
+ul.notes li { border-top: 1px solid var(--line); padding: 14px 0; }
+ul.notes li:first-child { border-top: none; }
+ul.notes .t { font-weight: 600; font-size: 15px; }
+ul.notes .b { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+.foot { color: var(--muted); font-size: 12px; margin-top: 28px; }
