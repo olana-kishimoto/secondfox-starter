@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
 // リクエストごとのSupabaseクライアント（公開鍵・RLSの範囲内で読む）。
 // 秘密鍵（service_role）はこのファイルでは使わない。NEXT_PUBLIC_ の2つだけで動く。
@@ -13,7 +13,7 @@ export function supabaseServer() {
         getAll() {
           return store.getAll();
         },
-        setAll(items) {
+        setAll(items: { name: string; value: string; options: CookieOptions }[]) {
           try {
             items.forEach(({ name, value, options }) => store.set(name, value, options));
           } catch {
