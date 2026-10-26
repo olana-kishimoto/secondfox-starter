@@ -5,6 +5,11 @@ on:
     - cron: "17 * * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
 jobs:
   watchdog:
     uses: olana-kishimoto/secondfox-harness/.github/workflows/watchdog-reusable.yml@main

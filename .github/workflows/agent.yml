@@ -6,6 +6,12 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: write
+
 concurrency:
   group: agent-${{ github.repository }}
   cancel-in-progress: false
