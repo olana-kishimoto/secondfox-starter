@@ -1,0 +1,23 @@
+name: 係（スマホからの依頼を処理）
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: agent-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    uses: olana-kishimoto/secondfox-harness/.github/workflows/agent-reusable.yml@main
+    secrets:
+      claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      harness_read_token: ${{ secrets.HARNESS_READ_TOKEN }}
+    with:
+      agent_enabled: ${{ vars.AGENT_ENABLED }}
+      agent_project_type: ${{ vars.AGENT_PROJECT_TYPE }}
+      agent_owners: ${{ vars.AGENT_OWNERS }}
+      agent_preview_ready: ${{ vars.AGENT_PREVIEW_READY }}
