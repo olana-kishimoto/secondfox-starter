@@ -27,3 +27,4 @@ jobs:
       agent_project_type: ${{ vars.AGENT_PROJECT_TYPE }}
       agent_owners: ${{ vars.AGENT_OWNERS }}
       agent_preview_ready: ${{ vars.AGENT_PREVIEW_READY }}
+      agent_attach_host: ${{ vars.AGENT_ATTACH_HOST }}
