@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   watchdog:
+    if: ${{ vars.AGENT_ENABLED == 'true' }}
     uses: olana-kishimoto/secondfox-harness/.github/workflows/watchdog-reusable.yml@main
     secrets:
       harness_read_token: ${{ secrets.HARNESS_READ_TOKEN }}
