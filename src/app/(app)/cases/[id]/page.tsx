@@ -3,9 +3,8 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FlashMessage } from "@/components/ui/FlashMessage";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { caseStatusLabel } from "@/lib/labels";
-import { DB_MISSING } from "@/lib/db-notice";
 import { APP_NAME } from "@/lib/app-info";
 import { CaseForm } from "../CaseForm";
 import { updateCase } from "../actions";
@@ -20,15 +19,7 @@ export default async function EditCasePage({ params, searchParams }: { params: P
   const { id } = await params;
   const sp = await searchParams;
   if (!UUID.test(id)) notFound();
-  const sb = createAdminClient();
-  if (!sb) {
-    return (
-      <main className="px-4 py-6 md:px-8 md:py-8">
-        <PageHeader eyebrow="Cases" title="案件編集" />
-        <FlashMessage error={DB_MISSING} />
-      </main>
-    );
-  }
+  const sb = await createClient();
   const [{ data: c }, { data: customers }] = await Promise.all([
     sb.from("cases").select("id, case_no, title, customer_id, status, amount, due_date, memo").eq("id", id).maybeSingle(),
     sb.from("customers").select("id, name, contact").order("name"),

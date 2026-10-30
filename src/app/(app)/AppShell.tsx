@@ -5,13 +5,13 @@ import { Suspense, useEffect, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileTabBar } from "@/components/MobileTabBar";
 import { NavProgress } from "@/components/NavProgress";
-import { IconSidebarExpand } from "@/components/icons";
+import { IconSidebarExpand, IconLogout } from "@/components/icons";
+import { logout } from "@/app/login/actions";
 import { APP_NAME } from "@/lib/app-info";
 
 const STORAGE_KEY = "app.sidebar.collapsed";
 
 // サイドバー＋ページ本体＋スマホ（上部バー／下部タブ）のアプリシェル。
-// ログインを足すときは email を受け取り、Sidebar のフッタにログアウトを出す。
 export function AppShell({
   email,
   children,
@@ -64,6 +64,14 @@ export function AppShell({
           <Link href="/" className="text-[12px] font-bold tracking-[0.16em] text-accent hover:opacity-80">
             {APP_NAME}
           </Link>
+          <div className="flex items-center gap-1">
+            <Link href="/account" className="px-2 py-1 text-[11px] tracking-[0.06em] text-muted hover:text-accent">アカウント</Link>
+            <form action={logout}>
+              <button type="submit" aria-label="ログアウト" className="flex h-8 w-8 items-center justify-center rounded text-muted hover:text-accent">
+                <IconLogout size={15} />
+              </button>
+            </form>
+          </div>
         </div>
 
         <div className="pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0">

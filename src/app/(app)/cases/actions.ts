@@ -2,11 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "@/lib/redirect";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { toUserMessage } from "@/lib/errors/db-error";
 import { nullableString, parseNumber, validateDateInput } from "@/lib/format";
 import { CASE_STATUS } from "@/lib/labels";
-import { DB_MISSING } from "@/lib/db-notice";
 
 type Parsed =
   | { ok: true; row: { title: string; customer_id: string | null; status: string; amount: number; due_date: string | null; memo: string } }
@@ -40,8 +39,7 @@ function parse(formData: FormData): Parsed {
 export async function createCase(formData: FormData) {
   const p = parse(formData);
   if (!p.ok) redirect(`/cases/new?error=${p.error}`);
-  const sb = createAdminClient();
-  if (!sb) redirect(`/cases/new?error=${DB_MISSING}`);
+  const sb = await createClient();
   const { data, error } = await sb.from("cases").insert(p.row).select("case_no").single();
   if (error) redirect(`/cases/new?error=${toUserMessage(error)}`);
   revalidatePath("/");
@@ -51,8 +49,7 @@ export async function createCase(formData: FormData) {
 export async function updateCase(id: string, formData: FormData) {
   const p = parse(formData);
   if (!p.ok) redirect(`/cases/${id}?error=${p.error}`);
-  const sb = createAdminClient();
-  if (!sb) redirect(`/cases/${id}?error=${DB_MISSING}`);
+  const sb = await createClient();
   const { error } = await sb.from("cases").update({ ...p.row, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) redirect(`/cases/${id}?error=${toUserMessage(error)}`);
   revalidatePath("/");
@@ -62,8 +59,7 @@ export async function updateCase(id: string, formData: FormData) {
 // 状態だけを変える（一覧から1操作で済む「完了にする」など）。
 export async function setCaseStatus(id: string, status: string) {
   if (!CASE_STATUS[status]) redirect(`/cases/${id}?error=状態が正しくありません`);
-  const sb = createAdminClient();
-  if (!sb) redirect(`/cases/${id}?error=${DB_MISSING}`);
+  const sb = await createClient();
   const { error } = await sb.from("cases").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) redirect(`/cases/${id}?error=${toUserMessage(error)}`);
   revalidatePath("/");
@@ -71,8 +67,7 @@ export async function setCaseStatus(id: string, status: string) {
 }
 
 export async function deleteCase(id: string) {
-  const sb = createAdminClient();
-  if (!sb) redirect(`/cases/${id}?error=${DB_MISSING}`);
+  const sb = await createClient();
   const { error } = await sb.from("cases").delete().eq("id", id);
   if (error) redirect(`/cases/${id}?error=${toUserMessage(error)}`);
   revalidatePath("/");

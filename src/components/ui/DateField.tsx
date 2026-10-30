@@ -15,5 +15,7 @@ export function DateField({
   className = "w-full rounded border border-line bg-surface px-3 py-[7px] text-[12px] text-text focus:border-accent focus:outline-none",
   ...props
 }: DateFieldProps) {
-  return <input type="date" min={min} max={max} className={className} {...props} />;
+  // type="date" はブラウザやツールが属性（style など）を足すことがあり、SSR とずれて dev で警告が出る。
+  // 値そのものは SSR とクライアントで同じ（defaultValue）なので、この要素の属性差だけ許す。
+  return <input type="date" min={min} max={max} className={className} suppressHydrationWarning {...props} />;
 }

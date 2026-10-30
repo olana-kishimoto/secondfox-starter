@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FlashMessage } from "@/components/ui/FlashMessage";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { DB_MISSING } from "@/lib/db-notice";
+import { createClient } from "@/lib/supabase/server";
 import { APP_NAME } from "@/lib/app-info";
 import { CaseForm } from "../CaseForm";
 import { createCase } from "../actions";
@@ -14,13 +13,13 @@ type SP = Promise<{ error?: string }>;
 
 export default async function NewCasePage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const sb = createAdminClient();
-  const { data } = sb ? await sb.from("customers").select("id, name, contact").order("name") : { data: [] };
+  const sb = await createClient();
+  const { data } = await sb.from("customers").select("id, name, contact").order("name");
 
   return (
     <main className="px-4 py-6 md:px-8 md:py-8">
       <PageHeader eyebrow="Cases" title="案件登録" description="案件を登録します。件名だけで登録できます。" />
-      <FlashMessage error={sb ? sp.error : DB_MISSING} />
+      <FlashMessage error={sp.error} />
       <CaseForm
         action={createCase}
         customers={data ?? []}

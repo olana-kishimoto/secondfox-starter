@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 export type SearchTemplate = {
   id: number;
@@ -9,10 +9,9 @@ export type SearchTemplate = {
   params: string;
 };
 
-// 一覧の検索条件の保存・取得・削除。ログインを足したら user_id 列を足して利用者ごとに分ける。
+// 一覧の検索条件の保存・取得・削除。ログイン中の利用者ごと（RLS：user_id = auth.uid()）。
 export async function loadSearchTemplates(screenKey: string): Promise<SearchTemplate[]> {
-  const sb = createAdminClient();
-  if (!sb) return [];
+  const sb = await createClient();
   const { data } = await sb
     .from("search_templates")
     .select("id, name, params")
@@ -29,19 +28,17 @@ export async function saveSearchTemplate(
 ): Promise<{ error?: string }> {
   if (!name.trim()) return { error: "テンプレート名を入力してください" };
   if (name.length > 50) return { error: "テンプレート名は50文字以内にしてください" };
-  const sb = createAdminClient();
-  if (!sb) return { error: "データベースに接続できません（環境変数が未設定です）" };
+  const sb = await createClient();
   const { error } = await sb
     .from("search_templates")
-    .upsert({ screen_key: screenKey, name: name.trim(), params }, { onConflict: "screen_key,name" });
+    .upsert({ screen_key: screenKey, name: name.trim(), params }, { onConflict: "user_id,screen_key,name" });
   if (error) return { error: "保存に失敗しました" };
   revalidatePath("/");
   return {};
 }
 
 export async function deleteSearchTemplate(id: number): Promise<{ error?: string }> {
-  const sb = createAdminClient();
-  if (!sb) return { error: "データベースに接続できません（環境変数が未設定です）" };
+  const sb = await createClient();
   const { error } = await sb.from("search_templates").delete().eq("id", id);
   if (error) return { error: "削除に失敗しました" };
   revalidatePath("/");

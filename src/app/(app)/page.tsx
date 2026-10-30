@@ -9,12 +9,11 @@ import { DataCard } from "@/components/ui/DataCard";
 import { LinkButton } from "@/components/ui/Button";
 import { DateField } from "@/components/ui/DateField";
 import { IconPlus, IconSearch } from "@/components/icons";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { loadSearchTemplates } from "@/lib/search-templates/actions";
 import { SCREEN_KEYS } from "@/lib/screen-keys";
 import { CASE_STATUS, caseStatusLabel } from "@/lib/labels";
 import { formatDate, formatYen } from "@/lib/format";
-import { DB_MISSING } from "@/lib/db-notice";
 import { APP_NAME } from "@/lib/app-info";
 import { cn } from "@/lib/cn";
 
@@ -44,7 +43,7 @@ export default async function CasesPage({ searchParams }: { searchParams: SP }) 
   const dir = sp.dir === "asc" ? "asc" : "desc";
   const page = Math.max(1, Math.floor(Number(sp.page ?? 1)) || 1);
 
-  const sb = createAdminClient();
+  const sb = await createClient();
   const templates = await loadSearchTemplates(SCREEN_KEYS.CASES);
 
   type Row = { id: string; case_no: string; title: string; status: string; amount: number; due_date: string | null; customers: { name: string } | null };
@@ -53,9 +52,7 @@ export default async function CasesPage({ searchParams }: { searchParams: SP }) 
   let customers: { id: string; name: string }[] = [];
   let error = sp.error;
 
-  if (!sb) {
-    error = DB_MISSING;
-  } else {
+  {
     const { data: cs } = await sb.from("customers").select("id, name").order("name");
     customers = cs ?? [];
 

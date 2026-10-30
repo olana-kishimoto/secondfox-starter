@@ -1,7 +1,9 @@
+import { getUser } from "@/lib/supabase/server";
 import { AppShell } from "./AppShell";
 
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  return <AppShell>{children}</AppShell>;
+  const me = await getUser();
+  return <AppShell email={me?.email ?? undefined}>{children}</AppShell>;
 }

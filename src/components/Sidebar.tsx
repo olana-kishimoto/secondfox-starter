@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { MAIN_MENU } from "@/lib/menu";
-import { IconSidebarCollapse } from "@/components/icons";
+import { IconSidebarCollapse, IconLogout } from "@/components/icons";
+import { logout } from "@/app/login/actions";
 import { APP_NAME, APP_SUB } from "@/lib/app-info";
 import { menuMatchLength } from "@/lib/menu";
 
@@ -111,13 +112,22 @@ export function Sidebar({
       })}
 
       {/* フッタ */}
-      {email && (
-        <div className="mt-auto border-t border-line pt-4">
-          <div className="px-2 text-[10px] tracking-[0.04em] text-muted" title={email}>
+      <div className="mt-auto border-t border-line pt-4">
+        {email && (
+          <div className="px-2 pb-2 text-[10px] tracking-[0.04em] text-muted" title={email}>
             <span className="block truncate">{email}</span>
           </div>
-        </div>
-      )}
+        )}
+        <Link href="/account" className={pathname === "/account" ? pillActive() : navItem()}>
+          <span className="text-[11px]">アカウント</span>
+        </Link>
+        <form action={logout}>
+          <button type="submit" className={navItem("w-full text-left")}>
+            <IconLogout size={15} />
+            <span>ログアウト</span>
+          </button>
+        </form>
+      </div>
     </aside>
   );
 }
