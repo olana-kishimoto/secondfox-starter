@@ -1,0 +1,103 @@
+@import "tailwindcss";
+@import "@fontsource/noto-sans-jp/japanese-400.css";
+@import "@fontsource/noto-sans-jp/japanese-500.css";
+@import "@fontsource/noto-sans-jp/japanese-700.css";
+
+/* ============================================================
+   業務システム デザイントークン（kobeya 由来・Quarc 水準）
+   オルアナカラー準拠: 白基調・シャープ・装飾最小
+   アクセント #9a1a3c は小面積に限定
+   ============================================================ */
+:root {
+  /* 面 */
+  --base: #edece7;       /* ベースカラー（下地・zebra） */
+  --surface: #ffffff;    /* 主要面（白） */
+
+  /* テキスト */
+  --text: #454545;       /* 基本テキスト */
+  --muted: #8a8a86;      /* 補助テキスト */
+
+  /* 罫線 */
+  --line: #e2e1db;       /* 極細罫線 */
+
+  /* アクセント */
+  --accent: #9a1a3c;     /* オルアナレッド */
+  --accent-2: #7a142f;   /* hover濃 */
+  --accent-soft: #f5e3e9;/* focus ring・うっすら背景 */
+
+  /* 状態色 */
+  --ok: #2f6f4a;
+  --ok-bg: #e6f1ea;
+  --warn: #8a6314;
+  --warn-bg: #f4ecd8;
+  --bad: #9a1a3c;
+  --bad-bg: #f5e3e9;
+  --info: #1c5fa5;
+  --info-bg: #e7eef7;
+
+  --font-sans:
+    "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Hiragino Sans",
+    "Yu Gothic", "YuGothic", "Meiryo", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+@theme inline {
+  --color-base: var(--base);
+  --color-surface: var(--surface);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-bad: var(--bad);
+  --color-bad-bg: var(--bad-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-card: 6px;
+  --radius-control: 4px;
+}
+
+body {
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.num,
+.mono {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mono {
+  font-family: var(--font-mono);
+}
+
+dialog::backdrop {
+  background: rgba(69, 69, 69, 0.32);
+}
+
+/* 全ボタンの押下フィードバック（手書きボタンも含めて統一） */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  transition: transform 0.1s ease, background-color 0.1s ease, border-color 0.1s ease, color 0.1s ease, opacity 0.1s ease;
+}
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active {
+  transform: scale(0.97);
+}
+button:disabled {
+  cursor: not-allowed;
+}
