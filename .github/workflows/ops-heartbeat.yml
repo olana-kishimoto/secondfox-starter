@@ -1,0 +1,44 @@
+name: ops-heartbeat
+
+# ハートビート: アプリの生存を定期確認して Den へ報告する（15分ごと＋手動）。
+# アプリのヘルスチェック（/api/health。DB疎通込み）を叩き、200 なら ok:true、それ以外は ok:false。
+#
+# 必要な Secrets（本稼働時に司令塔が入れる。未設定のあいだは、何もせず正常終了する）:
+#   APP_HEALTH_URL : 自分の本番のヘルスチェックURL（例: https://app.example.com/api/health）
+#   DEN_URL        : Den の本番URL
+#   OPS_TOKEN      : この案件用に Den で発行した監視トークン（olops_...）
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "*/15 * * * *"   # 15分ごと
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    env:
+      APP_HEALTH_URL: ${{ secrets.APP_HEALTH_URL }}
+      DEN_URL: ${{ secrets.DEN_URL }}
+      OPS_TOKEN: ${{ secrets.OPS_TOKEN }}
+    steps:
+      - name: Check app health and report to Den
+        run: |
+          # Den に未登録（監視トークン未設定）のシステムでは、失敗メールを出さないよう、何もせず正常終了する。
+          if [ -z "$DEN_URL" ] || [ -z "$OPS_TOKEN" ]; then
+            echo "DEN_URL / OPS_TOKEN が未設定のため、心拍を送らずに終了します（未登録のシステム）。"
+            exit 0
+          fi
+          CODE=000
+          if [ -n "$APP_HEALTH_URL" ]; then
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$APP_HEALTH_URL" || true)
+          fi
+          echo "health http=$CODE"
+          if [ "$CODE" = "200" ]; then
+            PAYLOAD='{"ok":true,"db":true}'
+          else
+            PAYLOAD="{\"ok\":false,\"db\":false,\"detail\":{\"http\":\"$CODE\"}}"
+          fi
+          curl -fsS -X POST "$DEN_URL/api/ingest/heartbeat" \
+            -H "Authorization: Bearer $OPS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"

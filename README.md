@@ -28,9 +28,10 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
   - `cases/new`・`cases/[id]` … 登録・編集（Field 類・顧客の検索モーダル・SubmitButton・ConfirmModal・FlashMessage）。`cases/actions.ts` が Server Action。
   - `master/` … マスタの見本（SubNav ＋ DataCard）。
 - `src/components/` … `Sidebar` / `MobileTabBar` / `NavProgress` / `icons` と、`ui/`（Button, PageHeader, SubNav, StatusBadge, DataCard, Pagination, SearchModal, SearchTemplates, ConfirmModal, FlashMessage, Field, DateField, MonthField, SubmitButton, Skeleton, Tip）、`print/`（PrintSheet・BackButton：ブラウザ印刷の共通基盤。帳票を作るときに使う）。
+- `.github/workflows/ops-heartbeat.yml` … このシステムは Den に心拍（15分ごと）を送る。トークン（`DEN_URL` / `OPS_TOKEN` / `APP_HEALTH_URL`）は本稼働時に司令塔が自動で入れる。未設定のあいだは何もせず正常終了する。
 - `src/middleware.ts` … 入口の合言葉＋ログイン確認の2段。`src/app/login/`（ログイン）、`src/app/(app)/account/`（パスワード変更）。
 - `src/lib/` … `password`（パスワード条件）、`format` / `labels` / `errors/db-error` / `fold-search` / `csv` / `csv-escape` / `cn` / `redirect` / `menu` / `app-info`（システム名）と、`supabase/`（`server.ts` = ログイン中の利用者として動く標準の入口、`middleware.ts` = ログイン確認、`client.ts`、`admin.ts` = 特権操作だけの service_role）。
-- `src/app/api/health/route.ts` … 死活監視の口（`{ ok: true }` だけ返す）。ログインや合言葉のゲートを足したら、ここは必ず除外すること。
+- `src/app/api/health/route.ts` … 死活監視の口（DB に軽く1本届くことまで確かめ、`{ ok }` だけ返す。落ちていれば 503）。ログインや合言葉のゲートを足したら、ここは必ず除外すること。
 - `supabase/migrations/0001_init.sql` … 見本が動く最小スキーマ（`customers` / `cases` / `search_templates`）。全テーブル RLS 有効・明示 GRANT つき。`0002_auth_rls.sql` で「ログイン済みだけ読み書き可」に作り直す。初期データ（顧客5・案件42）は本番に出す前に消してよい。
 
 ## アクセス制御（焼き込み済みの型）
