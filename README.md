@@ -22,6 +22,7 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
 
 ## 中身
 
+- `vercel.json` … 実行リージョンを東京（`hnd1`）に固定。Supabase を東京（ap-northeast-1）で作る前提と揃えるため。未指定だと Vercel の既定が米国になり、画面を出すたびに DB と太平洋を往復して致命的に遅い。地域が日本以外の客は、Vercel と Supabase の両方をその地域にそろえる。
 - `src/app/(app)/` … アプリシェル（`AppShell.tsx`：サイドバー＋ページ本体＋スマホの上部バー／下部タブ）、`loading.tsx`、`error.tsx`。
   - `page.tsx` … 見本画面「案件一覧」（検索カード・保存条件・見出しクリックの並べ替え・サーバーのページ送り・StatusBadge。スマホはカード表示）。
   - `cases/new`・`cases/[id]` … 登録・編集（Field 類・顧客の検索モーダル・SubmitButton・ConfirmModal・FlashMessage）。`cases/actions.ts` が Server Action。
