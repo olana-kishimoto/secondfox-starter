@@ -24,7 +24,10 @@ const cookieOptions = {
 
 // 機械向けの口は両方の関所を通さない。完全一致で判定する。
 //   /api/health … { ok } だけ返す監視口。業務データは返さないので公開して安全。
-const OPEN_PATHS = new Set(["/api/health"]);
+//   /manifest.webmanifest・/sw.js・/icons/* … ホーム画面に追加するための静的ファイル。ブラウザはマニフェストを Cookie なしで取りに来るため、
+//     ここを通さないと入口の合言葉で弾かれてインストールできない。業務データは含まない。
+const OPEN_PATHS = new Set(["/api/health", "/manifest.webmanifest", "/sw.js"]);
+const OPEN_PREFIXES = ["/icons/"];
 // 自前の鍵で検証する前提の機械向けの口（Webhook・Cron）。入口の合言葉は求めない。
 // ここに置いた口は、必ず口の中で署名や CRON_SECRET を確かめること（確かめないと誰でも叩ける）。
 const SELF_VERIFIED_PREFIXES = ["/api/webhooks/", "/api/cron/"];
@@ -102,7 +105,7 @@ ${failed ? '<p class="e">合言葉が正しくありません。</p>' : ""}
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (OPEN_PATHS.has(pathname)) return NextResponse.next();
+  if (OPEN_PATHS.has(pathname) || OPEN_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
   if (SELF_VERIFIED_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
   const enabled = process.env.ACCESS_ENABLED !== "false";
