@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { TAB_MENU, menuMatchLength } from "@/lib/menu";
+import { tabsFor, menuMatchLength } from "@/lib/menu";
 import { cn } from "@/lib/cn";
 
-export function MobileTabBar() {
+export function MobileTabBar({ role }: { role?: string | null }) {
   const pathname = usePathname();
+  const TAB_MENU = tabsFor(role);
 
   return (
     <nav

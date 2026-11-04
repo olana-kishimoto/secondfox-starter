@@ -14,9 +14,11 @@ const STORAGE_KEY = "app.sidebar.collapsed";
 // サイドバー＋ページ本体＋スマホ（上部バー／下部タブ）のアプリシェル。
 export function AppShell({
   email,
+  role,
   children,
 }: {
   email?: string | null;
+  role?: string | null;
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -46,7 +48,7 @@ export function AppShell({
   return (
     <div className="flex min-h-screen bg-surface">
       <Suspense fallback={null}><NavProgress /></Suspense>
-      {!collapsed && <Sidebar email={email} onCollapse={toggle} />}
+      {!collapsed && <Sidebar email={email} role={role} onCollapse={toggle} />}
       <div className="relative flex-1 min-w-0">
         {collapsed && (
           <button
@@ -78,7 +80,7 @@ export function AppShell({
           {children}
         </div>
       </div>
-      <MobileTabBar />
+      <MobileTabBar role={role} />
     </div>
   );
 }
