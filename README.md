@@ -56,8 +56,29 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
 
 - **Supabase の Auth で「サインアップ（新規登録）」を無効にする**（Authentication → Sign In / Providers → "Allow new users to sign up" を OFF）。anon キーはブラウザに配られるため、これを OFF にしないと誰でもアカウントを作って「ログイン済み」になり、RLS を通れてしまう。パスワードの最小長も12に設定し、可能なら漏洩パスワードの拒否を有効にする。
 - **初期ユーザーは Supabase で作る**（Authentication → Users → Add user、またはプロビジョニング時に Auth の Admin API で作る）。自己登録はさせない。メール確認済みで作り、仮パスワードは本人に安全な方法で渡す（DB・ログに残さない）。本人は `/account` で変更する。
-  - 雛形にはユーザー追加の画面は入れていない。管理者の判定の元になる役割の持ち方が、プロビジョニング側と決まっていないため。
+  - 雛形にはユーザー追加の画面は入れていない（利用者そのものは Supabase で作る）。役割の割り当ては、下の「役割と権限」の画面でできる。
 - `ACCESS_KEYS`（32桁）と `ACCESS_COOKIE_SECRET` を Vercel に入れる。Supabase の3つ以外は自動では入らない。
+
+## 役割と権限（認証の内側の出し分け）
+
+入口の合言葉・ログイン・0002 の RLS は変えず、その**上に足す**土台です（`supabase/migrations/0003_roles.sql`）。営業・経理などの具体的な役割は入れていません。**各システムが自分の役割を決めて使います。**
+
+- **役割はデータ**：`roles`（役割の一覧）と `profiles`（利用者ごとの役割。1人1役割・行が無ければ「役割なし」）。決め打ちの enum にしない。`admin` だけは予約の特別役割＝全部見える。既定の種は `admin`（管理者）と `staff`（担当者）の2つだけ。
+- **判定（サーバー）**：`src/lib/roles.ts` の `currentRole()` / `isAdmin()` / `hasRole("sales", …)` / `requireRole("sales")` / `requireAdmin()`。レイアウト・ページ・Server Action で使う。ページや Server Action の**最初**で `requireRole(...)` を呼び、操作そのものを止める。純関数は `src/lib/roles-core.ts`。
+- **見た目の出し分け**：`src/lib/menu.ts` の項目に `roles: ["sales"]` を付けると、その役割（と管理者）にだけ出る（`roles: []` なら管理者だけ）。付けない項目は、ログイン済みなら全員に出る（従来どおり）。
+- **隠す＝守る、ではない**：メニューやボタンを隠しても、URL を直接開く・操作を直接呼ぶことは止まりません。**守るべきデータは、必ず RLS でも閉じてください。**
+- **RLS の型**：`0003_roles.sql` の `sample_notes` が見本。読むのは「管理者と、列挙した役割だけ」、書くのは管理者だけ。
+
+  ```sql
+  create policy x_read on x for select to authenticated using (app_has_role(array['sales']));   -- 営業と管理者だけ読める
+  create policy x_write on x for all to authenticated using (app_is_admin()) with check (app_is_admin());
+  ```
+  `app_has_role(keys)`（管理者は常に true／役割なしは false）、`app_is_admin()`、`app_role()` を使う。表ごとのポリシーは各システムが書く。既存の `cases` / `customers` は 0002 のまま（ログイン済みなら全員）。絞りたい表だけ作り直す。見本の `sample_notes` は、実際の表ができたら消してよい。
+- **割り当て**：管理者が `/admin/roles`（メニュー「利用者と役割」）で、利用者ごとの役割と、役割の追加ができる。自分で自分の役割は変えられない（RLS）。自分の管理者の役割は外せない。
+- **最初の管理者**：新規作成時に、サーバー側（service_role）で最初の1人を `profiles` に入れる（`insert into profiles (user_id, role) values ('<auth.users の id>', 'admin')`）。この1人がいないと、役割の画面は誰も開けない。仮パスワードなどの秘密は DB・ログに残さない。
+- 0003 が未適用でも、既存の画面は動く（`currentRole()` は「役割なし」を返す）。
+
+テスト：`pnpm test`（役割の判定・メニューの出し分け・実際の Postgres での RLS・既存の守りが変わっていないこと）。
 
 ## 開発
 

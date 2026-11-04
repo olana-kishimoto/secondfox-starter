@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import { IconOrder, IconPlus, IconMaster } from "@/components/icons";
+import { filterByRole } from "@/lib/roles-core";
 
 export type MenuItem = {
   key: string;
@@ -8,6 +9,7 @@ export type MenuItem = {
   icon: ComponentType<{ size?: number; className?: string }>;
   group?: string;
   hidden?: boolean;
+  roles?: string[]; // この役割（と管理者）にだけ出す。省略すると、ログイン済みなら全員に出す。見た目の出し分けで、データを守るのは RLS（0003_roles.sql）
   also?: string[]; // この画面に属する他の URL の頭（例: 編集画面 /cases/…）
 };
 
@@ -19,6 +21,8 @@ export const MAIN_MENU: MenuItem[] = [
   { key: "case_new",  label: "案件登録", href: "/cases/new", icon: IconPlus,  group: "業務" },
   // 設定
   { key: "master",    label: "マスタ",   href: "/master",    icon: IconMaster, group: "設定" },
+  // 役割を割り当てる（管理者だけ。roles が空＝管理者だけ）
+  { key: "roles",     label: "利用者と役割", href: "/admin/roles", icon: IconMaster, group: "設定", roles: [] },
 ];
 
 // モバイルのタブバー用（5項目まで）
@@ -37,3 +41,7 @@ export function menuMatchLength(item: MenuItem, pathname: string): number {
   }
   return best;
 }
+
+// 役割で出し分けた一覧（サイドバー・タブ用）。役割は layout がサーバーで判定して渡す。
+export const menuFor = (role: string | null | undefined) => filterByRole(MAIN_MENU, role);
+export const tabsFor = (role: string | null | undefined) => filterByRole(TAB_MENU, role);

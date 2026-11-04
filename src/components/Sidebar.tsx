@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { MAIN_MENU } from "@/lib/menu";
+import { menuFor } from "@/lib/menu";
 import { IconSidebarCollapse, IconLogout } from "@/components/icons";
 import { logout } from "@/app/login/actions";
 import { APP_NAME, APP_SUB } from "@/lib/app-info";
@@ -11,12 +11,15 @@ import { menuMatchLength } from "@/lib/menu";
 
 export function Sidebar({
   email,
+  role,
   onCollapse,
 }: {
   email?: string | null;
+  role?: string | null;
   onCollapse?: () => void;
 }) {
   const pathname = usePathname();
+  const MAIN_MENU = menuFor(role);   // 役割で出し分け（見た目だけ。守るのは RLS とサーバーの判定）
 
   const groups = Array.from(
     new Set(MAIN_MENU.filter((m) => !m.hidden).map((m) => m.group).filter((g): g is string => !!g)),
