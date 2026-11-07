@@ -29,27 +29,28 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
   - `master/` … マスタの見本（SubNav ＋ DataCard）。
 - `src/components/` … `Sidebar` / `MobileTabBar` / `NavProgress` / `icons` と、`ui/`（Button, PageHeader, SubNav, StatusBadge, DataCard, Pagination, SearchModal, SearchTemplates, ConfirmModal, FlashMessage, Field, DateField, MonthField, SubmitButton, Skeleton, Tip）、`print/`（PrintSheet・BackButton：ブラウザ印刷の共通基盤。帳票を作るときに使う）。
 - `.github/workflows/ops-heartbeat.yml` … このシステムは Den に心拍（15分ごと）を送る。トークン（`DEN_URL` / `OPS_TOKEN` / `APP_HEALTH_URL`）は本稼働時に司令塔が自動で入れる。未設定のあいだは何もせず正常終了する。
-- `src/middleware.ts` … 入口の合言葉＋ログイン確認の2段。`src/app/login/`（ログイン）、`src/app/(app)/account/`（パスワード変更）。
+- `src/middleware.ts` … 入口のアクセスコード（任意・既定OFF）＋ログイン確認の2段。`src/app/login/`（ログイン）、`src/app/(app)/account/`（パスワード変更）。
 - `src/lib/` … `password`（パスワード条件）、`format` / `labels` / `errors/db-error` / `fold-search` / `csv` / `csv-escape` / `cn` / `redirect` / `menu` / `app-info`（システム名）と、`supabase/`（`server.ts` = ログイン中の利用者として動く標準の入口、`middleware.ts` = ログイン確認、`client.ts`、`admin.ts` = 特権操作だけの service_role）。
-- `src/app/api/health/route.ts` … 死活監視の口（DB に軽く1本届くことまで確かめ、`{ ok }` だけ返す。落ちていれば 503）。ログインや合言葉のゲートを足したら、ここは必ず除外すること。
+- `src/app/api/health/route.ts` … 死活監視の口（DB に軽く1本届くことまで確かめ、`{ ok }` だけ返す。落ちていれば 503）。ログインやアクセスコードのゲートを足したら、ここは必ず除外すること。
 - `supabase/migrations/0001_init.sql` … 見本が動く最小スキーマ（`customers` / `cases` / `search_templates`）。全テーブル RLS 有効・明示 GRANT つき。`0002_auth_rls.sql` で「ログイン済みだけ読み書き可」に作り直す。初期データ（顧客5・案件42）は本番に出す前に消してよい。
 
 ## アクセス制御（焼き込み済みの型）
 
-お客様に渡せる状態で出荷される。**入口の合言葉 → ログイン → RLS** の3段で守る。
+お客様に渡せる状態で出荷される。**入口のアクセスコード（任意・既定OFF） → ログイン → RLS** の3段で守る。
 
-1. **入口＝32桁の合言葉**（`src/middleware.ts`）。玄関を隠し、第三者を画面に近づけない層（本人確認ではない）。
-   - env `ACCESS_KEYS`（32桁以外は無視・カンマ区切りで複数可・1本消せばその合言葉だけ即失効）と照合。フォーム送信（`/__access`）。
-   - Cookie は生の合言葉でなく HMAC-SHA256 署名（鍵は `ACCESS_COOKIE_SECRET`）。httpOnly。有効期限はスライディング60日・端末ごと（通過のたびに貼り直す）。
-   - 合言葉または署名鍵が未設定だと**誰も入れない**（安全側に止まる）。
+1. **入口＝アクセスコード**（`src/middleware.ts`）。玄関を隠し、第三者を画面に近づけない任意の層（本人確認ではない）。**既定はOFF**で、素通りでログイン画面へ進む。
+   - 有効にするのは `ACCESS_ENABLED="true"` のときだけ（SecondFox のセキュリティ設定でONにすると、`ACCESS_ENABLED=true` とアクセスコード `ACCESS_KEYS` が Vercel に入る）。
+   - env `ACCESS_KEYS`（アクセスコード。内部的には32桁で、32桁以外は無視・カンマ区切りで複数可・1本消せばそのコードだけ即失効）と照合。フォーム送信（`/__access`）。画面には「アクセスコード」「コード」とだけ出て、「32桁」の語は出ない。
+   - Cookie は生のアクセスコードでなく HMAC-SHA256 署名（鍵は `ACCESS_COOKIE_SECRET`）。httpOnly。有効期限はスライディング60日・端末ごと（通過のたびに貼り直す）。
+   - 有効（`ACCESS_ENABLED="true"`）なのにアクセスコードまたは署名鍵 `ACCESS_COOKIE_SECRET` が未設定だと**誰も入れない**（安全側に止まる）。`ACCESS_ENABLED` が未設定・`true` 以外なら入口は無効で、この層は何もしない。
 2. **内側＝Supabase Auth のログイン**（`/login`、`src/lib/supabase/middleware.ts`）。自己登録なし・メール認証なし。パスワードは12文字以上で、弱いものは弾く（`src/lib/password.ts` と Supabase 側の検査）。`/account` で自分のパスワードを変更。
 3. **読み書きはログイン中の利用者として**（`src/lib/supabase/server.ts` の `createClient()`）。**ページと Server Action で service_role は使わない**。`admin.ts` の service_role は、権限確認が済んだ特権操作（例：管理者による利用者の作成）にだけ使う。
 4. **RLS**（`supabase/migrations/0002_auth_rls.sql`）：ログイン済み（authenticated）は業務テーブルを読み書きできる、anon は何もできない。1社専用なのでテナント分割はしない（ログイン済み＝そのお客様のスタッフ）。検索条件の保存だけ利用者ごと。
 
 ### middleware の約束事（崩さない）
 
-- 公開の口は**完全一致**で判定する：`/login`（合言葉は通すがログイン確認は通さない）、`/api/health`（`{ ok }` だけ返す監視口。合言葉もログインも不要）。公開の口を `updateSession` に通すと、未ログイン→`/login` へ 307 で結局弾かれる。
-- `/api/webhooks/` と `/api/cron/` は入口の合言葉から外してある。**その口の中で、自前の鍵（署名・`CRON_SECRET`）を必ず検証すること**（検証しないと誰でも叩ける）。
+- 公開の口は**完全一致**で判定する：`/login`（アクセスコードは通すがログイン確認は通さない）、`/api/health`（`{ ok }` だけ返す監視口。アクセスコードもログインも不要）。公開の口を `updateSession` に通すと、未ログイン→`/login` へ 307 で結局弾かれる。
+- `/api/webhooks/` と `/api/cron/` は入口のアクセスコードから外してある。**その口の中で、自前の鍵（署名・`CRON_SECRET`）を必ず検証すること**（検証しないと誰でも叩ける）。
 - Next 16 は `middleware` を `proxy` に改名する方向で、dev で非推奨の警告が出る（動作する）。移行は `src/middleware.ts` → `src/proxy.ts`、関数名 `middleware` → `proxy`。
 
 ### 新規作成時に必ずやること（漏れると安全でない）
@@ -57,11 +58,11 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
 - **Supabase の Auth で「サインアップ（新規登録）」を無効にする**（Authentication → Sign In / Providers → "Allow new users to sign up" を OFF）。anon キーはブラウザに配られるため、これを OFF にしないと誰でもアカウントを作って「ログイン済み」になり、RLS を通れてしまう。パスワードの最小長も12に設定し、可能なら漏洩パスワードの拒否を有効にする。
 - **初期ユーザーは Supabase で作る**（Authentication → Users → Add user、またはプロビジョニング時に Auth の Admin API で作る）。自己登録はさせない。メール確認済みで作り、仮パスワードは本人に安全な方法で渡す（DB・ログに残さない）。本人は `/account` で変更する。
   - 雛形にはユーザー追加の画面は入れていない（利用者そのものは Supabase で作る）。役割の割り当ては、下の「役割と権限」の画面でできる。
-- `ACCESS_KEYS`（32桁）と `ACCESS_COOKIE_SECRET` を Vercel に入れる。Supabase の3つ以外は自動では入らない。
+- 入口のアクセスコードを使うときだけ、`ACCESS_ENABLED=true`・`ACCESS_KEYS`（アクセスコード。内部的には32桁）・`ACCESS_COOKIE_SECRET` を Vercel に入れる（既定は入口OFFで、入れなくてもログイン画面に進む）。Supabase の3つ以外は自動では入らない。
 
 ## 役割と権限（認証の内側の出し分け）
 
-入口の合言葉・ログイン・0002 の RLS は変えず、その**上に足す**土台です（`supabase/migrations/0003_roles.sql`）。営業・経理などの具体的な役割は入れていません。**各システムが自分の役割を決めて使います。**
+入口のアクセスコード・ログイン・0002 の RLS は変えず、その**上に足す**土台です（`supabase/migrations/0003_roles.sql`）。営業・経理などの具体的な役割は入れていません。**各システムが自分の役割を決めて使います。**
 
 - **役割はデータ**：`roles`（役割の一覧）と `profiles`（利用者ごとの役割。1人1役割・行が無ければ「役割なし」）。決め打ちの enum にしない。`admin` だけは予約の特別役割＝全部見える。既定の種は `admin`（管理者）と `staff`（担当者）の2つだけ。
 - **判定（サーバー）**：`src/lib/roles.ts` の `currentRole()` / `isAdmin()` / `hasRole("sales", …)` / `requireRole("sales")` / `requireAdmin()`。レイアウト・ページ・Server Action で使う。ページや Server Action の**最初**で `requireRole(...)` を呼び、操作そのものを止める。純関数は `src/lib/roles-core.ts`。
@@ -84,6 +85,6 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
 
 ```
 pnpm install
-pnpm dev          # .env.local に Supabase の値と ACCESS_*。ローカルだけ ACCESS_ENABLED=false で入口を外せる
+pnpm dev          # .env.local に Supabase の値と ACCESS_*。入口は既定で無効（有効にするときだけ ACCESS_ENABLED=true と ACCESS_KEYS）
 pnpm typecheck && pnpm build
 ```
