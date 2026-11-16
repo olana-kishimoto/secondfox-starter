@@ -156,10 +156,10 @@ begin
   insert into profiles (user_id, role_id, email)
   values (
     new.id,
-    case when new.raw_app_meta_data->>'role' = 'admin'
+    (case when new.raw_app_meta_data->>'role' = 'admin'
       then '00000000-0000-4000-9000-000000000001'
       else '00000000-0000-4000-9000-000000000002'
-    end,
+    end)::uuid,
     new.email
   )
   on conflict (user_id) do nothing;
@@ -176,10 +176,10 @@ create trigger auto_profile
 insert into profiles (user_id, role_id, email)
 select
   u.id,
-  case when u.raw_app_meta_data->>'role' = 'admin'
+  (case when u.raw_app_meta_data->>'role' = 'admin'
     then '00000000-0000-4000-9000-000000000001'
     else '00000000-0000-4000-9000-000000000002'
-  end,
+  end)::uuid,
   u.email
 from auth.users u
 on conflict (user_id) do nothing;
