@@ -15,10 +15,12 @@ const STORAGE_KEY = "app.sidebar.collapsed";
 export function AppShell({
   email,
   perms,
+  permsFailed,
   children,
 }: {
   email?: string | null;
   perms?: Perms;
+  permsFailed?: boolean;
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -69,6 +71,13 @@ export function AppShell({
         </div>
 
         <div className="pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0">
+          {permsFailed && (
+            <div className="px-4 pt-4 md:px-8 md:pt-6">
+              <div className="notice bad">
+                <p>権限情報を確認できませんでした。再読み込みするか担当者にご連絡ください。</p>
+              </div>
+            </div>
+          )}
           {children}
         </div>
       </div>

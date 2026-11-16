@@ -38,7 +38,7 @@ function parse(formData: FormData): Parsed {
 }
 
 export async function createCase(formData: FormData) {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "cases", "edit")) redirect("/");
   const p = parse(formData);
   if (!p.ok) redirect(`/cases/new?error=${p.error}`);
@@ -50,7 +50,7 @@ export async function createCase(formData: FormData) {
 }
 
 export async function updateCase(id: string, formData: FormData) {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "cases", "edit")) redirect("/");
   const p = parse(formData);
   if (!p.ok) redirect(`/cases/${id}?error=${p.error}`);
@@ -63,7 +63,7 @@ export async function updateCase(id: string, formData: FormData) {
 
 // 状態だけを変える（一覧から1操作で済む「完了にする」など）。
 export async function setCaseStatus(id: string, status: string) {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "cases", "edit")) redirect(`/cases/${id}?error=権限がありません`);
   if (!CASE_STATUS[status]) redirect(`/cases/${id}?error=状態が正しくありません`);
   const sb = await createClient();
@@ -74,7 +74,7 @@ export async function setCaseStatus(id: string, status: string) {
 }
 
 export async function deleteCase(id: string) {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "cases", "manage")) redirect(`/cases/${id}?error=権限がありません`);
   const sb = await createClient();
   const { error } = await sb.from("cases").delete().eq("id", id);

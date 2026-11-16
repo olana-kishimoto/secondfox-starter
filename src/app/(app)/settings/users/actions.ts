@@ -21,7 +21,7 @@ function generateTempPassword(): string {
 }
 
 export async function addUser(_: UserActionState, formData: FormData): Promise<UserActionState> {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "users", "manage")) return { ok: false, error: "権限がありません" };
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -48,7 +48,7 @@ export async function addUser(_: UserActionState, formData: FormData): Promise<U
 }
 
 export async function changeRole(formData: FormData) {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "users", "manage")) redirect("/settings/users?error=権限がありません");
 
   const userId = String(formData.get("user_id") ?? "");
@@ -80,7 +80,7 @@ export async function changeRole(formData: FormData) {
 }
 
 export async function deactivateUser(formData: FormData) {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "users", "manage")) redirect("/settings/users?error=権限がありません");
 
   const userId = String(formData.get("user_id") ?? "");
@@ -112,7 +112,7 @@ export async function deactivateUser(formData: FormData) {
 }
 
 export async function reactivateUser(formData: FormData) {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "users", "manage")) redirect("/settings/users?error=権限がありません");
 
   const userId = String(formData.get("user_id") ?? "");
@@ -129,7 +129,7 @@ export async function reactivateUser(formData: FormData) {
 }
 
 export async function resetPassword(_: UserActionState, formData: FormData): Promise<UserActionState> {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "users", "manage")) return { ok: false, error: "権限がありません" };
 
   const userId = String(formData.get("user_id") ?? "");

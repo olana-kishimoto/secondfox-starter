@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 // マスタ（見本：顧客）。マスタが増えたら SubNav のタブに足していく。
 export default async function MasterPage() {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "customers", "view")) redirect("/");
 
   const sb = await createClient();

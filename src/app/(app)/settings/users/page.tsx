@@ -16,7 +16,12 @@ export default async function UsersPage({
 }: {
   searchParams?: Promise<{ msg?: string; error?: string }>;
 }) {
-  const perms = await getMyPerms();
+  const { perms, fetchFailed } = await getMyPerms();
+  if (fetchFailed) return (
+    <main className="px-4 py-6 md:px-8 md:py-8">
+      <div className="notice bad"><p>権限情報を確認できませんでした。再読み込みするか担当者にご連絡ください。</p></div>
+    </main>
+  );
   if (!can(perms, "users", "manage")) redirect("/");
 
   const sb = await createClient();
