@@ -6,7 +6,7 @@ import { getMyPerms, can } from "@/lib/perm";
 import { redirect } from "@/lib/redirect";
 
 export async function createRole(formData: FormData) {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "roles", "manage")) redirect("/settings/roles?error=権限がありません");
 
   const name = String(formData.get("name") ?? "").trim();
@@ -29,7 +29,7 @@ export async function createRole(formData: FormData) {
 }
 
 export async function updateRoleName(formData: FormData) {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "roles", "manage")) redirect("/settings/roles?error=権限がありません");
 
   const roleId = String(formData.get("role_id") ?? "");
@@ -48,7 +48,7 @@ export async function updateRoleName(formData: FormData) {
 }
 
 export async function deleteRole(formData: FormData) {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "roles", "manage")) redirect("/settings/roles?error=権限がありません");
 
   const roleId = String(formData.get("role_id") ?? "");
@@ -69,7 +69,7 @@ export async function deleteRole(formData: FormData) {
 }
 
 export async function savePermissions(formData: FormData) {
-  const perms = await getMyPerms();
+  const { perms } = await getMyPerms();
   if (!can(perms, "roles", "manage")) redirect("/settings/roles?error=権限がありません");
 
   const roleId = String(formData.get("role_id") ?? "");

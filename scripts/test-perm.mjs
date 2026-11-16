@@ -262,6 +262,47 @@ test("2 admins: demote one to staff ok", () =>
 test("1 admin: change non-admin user role ok", () =>
   assert.equal(simulateChangeRole(soloAdmin, "u2", adminRoleId), "ok"));
 
+// ─── 10. getMyPerms fetchFailed 挙動のシミュレーション ────────────────────────
+// perm.ts の getMyPerms は { perms, fetchFailed } を返す。
+// RPC error → { perms: {}, fetchFailed: true }
+// data null → { perms: {}, fetchFailed: false }
+// 正常      → { perms: data, fetchFailed: false }
+
+console.log("\n10. getMyPerms fetchFailed simulation");
+
+function simulateGetMyPerms({ data, error }) {
+  if (error) return { perms: {}, fetchFailed: true };
+  if (!data) return { perms: {}, fetchFailed: false };
+  return { perms: data, fetchFailed: false };
+}
+
+test("RPC error → fetchFailed=true, perms={}", () => {
+  const { perms, fetchFailed } = simulateGetMyPerms({ data: null, error: { code: "PGRST301", message: "JWT expired" } });
+  assert.equal(fetchFailed, true);
+  assert.deepEqual(perms, {});
+});
+test("data=null → fetchFailed=false, perms={}", () => {
+  const { perms, fetchFailed } = simulateGetMyPerms({ data: null, error: null });
+  assert.equal(fetchFailed, false);
+  assert.deepEqual(perms, {});
+});
+test("正常レスポンス → fetchFailed=false, perms=data", () => {
+  const data = { cases: "edit", users: "none" };
+  const { perms, fetchFailed } = simulateGetMyPerms({ data, error: null });
+  assert.equal(fetchFailed, false);
+  assert.deepEqual(perms, data);
+});
+test("fetchFailed 時は権限ゼロ扱い（manage アクセス不可）", () => {
+  const { perms, fetchFailed } = simulateGetMyPerms({ data: null, error: { code: "500", message: "internal" } });
+  assert.equal(fetchFailed, true);
+  assert.equal(can(perms, "users", "manage"), false);
+});
+test("fetchFailed 時はメニューが空になる（feature ガード全滅）", () => {
+  const { perms } = simulateGetMyPerms({ data: null, error: { code: "500", message: "x" } });
+  const visible = MENU.filter((m) => !m.feature || can(perms, m.feature, m.minLevel ?? "view"));
+  assert.equal(visible.length, 1); // feature 無しの「案件」だけ
+});
+
 // ─── summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${"─".repeat(50)}`);
