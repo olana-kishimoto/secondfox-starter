@@ -139,11 +139,12 @@ export async function middleware(request: NextRequest) {
     const form = new URLSearchParams(await request.text());
     const next = safeNext(form.get("next"));
     const input = (form.get("key") ?? "").trim();
-    const value = secret && input.length === KEY_LEN ? await hmac(input, secret) : "";
     let gateOk = false;
-    if (value) {
-      try { gateOk = await matches(value, secret); } catch { gateOk = false; }
-    }
+    let value = "";
+    try {
+      value = secret && input.length === KEY_LEN ? await hmac(input, secret) : "";
+      if (value) gateOk = await matches(value, secret);
+    } catch { gateOk = false; }
     if (!gateOk) {
       await new Promise((r) => setTimeout(r, 1000)); // 総当たりを遅くする
       return accessPage(next, true, 403);
