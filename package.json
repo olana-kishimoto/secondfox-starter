@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings scripts/test-roles.mjs"
+    "test": "node --experimental-strip-types --no-warnings scripts/test-roles.mjs",
+    "check:boundary": "node scripts/check-boundary.mjs"
   },
   "dependencies": {
     "@fontsource/noto-sans-jp": "^5.2.9",
