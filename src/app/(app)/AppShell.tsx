@@ -8,39 +8,33 @@ import { NavProgress } from "@/components/NavProgress";
 import { IconSidebarExpand, IconLogout } from "@/components/icons";
 import { logout } from "@/app/login/actions";
 import { APP_NAME } from "@/lib/app-info";
+import type { MenuItem } from "@/lib/menu";
 
 const STORAGE_KEY = "app.sidebar.collapsed";
 
-// サイドバー＋ページ本体＋スマホ（上部バー／下部タブ）のアプリシェル。
 export function AppShell({
   email,
-  role,
+  menuItems,
+  tabItems,
   children,
 }: {
   email?: string | null;
-  role?: string | null;
+  menuItems?: MenuItem[];
+  tabItems?: MenuItem[];
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     try {
-      if (window.localStorage.getItem(STORAGE_KEY) === "1") {
-        setCollapsed(true);
-      }
-    } catch {
-      // localStorage 使えない環境は無視
-    }
+      if (window.localStorage.getItem(STORAGE_KEY) === "1") setCollapsed(true);
+    } catch { /* ignore */ }
   }, []);
 
   const toggle = () => {
     setCollapsed((prev) => {
       const next = !prev;
-      try {
-        window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
-      } catch {
-        // ignore
-      }
+      try { window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0"); } catch { /* ignore */ }
       return next;
     });
   };
@@ -48,7 +42,7 @@ export function AppShell({
   return (
     <div className="flex min-h-screen bg-surface">
       <Suspense fallback={null}><NavProgress /></Suspense>
-      {!collapsed && <Sidebar email={email} role={role} onCollapse={toggle} />}
+      {!collapsed && <Sidebar email={email} onCollapse={toggle} items={menuItems} />}
       <div className="relative flex-1 min-w-0">
         {collapsed && (
           <button
@@ -80,7 +74,7 @@ export function AppShell({
           {children}
         </div>
       </div>
-      <MobileTabBar role={role} />
+      <MobileTabBar items={tabItems} />
     </div>
   );
 }

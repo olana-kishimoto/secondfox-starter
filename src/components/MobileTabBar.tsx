@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { tabsFor, menuMatchLength } from "@/lib/menu";
+import { TAB_MENU, menuMatchLength, type MenuItem } from "@/lib/menu";
 import { cn } from "@/lib/cn";
 
-export function MobileTabBar({ role }: { role?: string | null }) {
+export function MobileTabBar({ items }: { items?: MenuItem[] }) {
   const pathname = usePathname();
-  const TAB_MENU = tabsFor(role);
+  const menu = items ?? TAB_MENU;
 
   return (
     <nav
@@ -19,8 +19,8 @@ export function MobileTabBar({ role }: { role?: string | null }) {
       )}
     >
       <ul className="flex">
-        {TAB_MENU.map(({ key, label, href, icon: Icon, also }) => {
-          const best = Math.max(...TAB_MENU.map((m) => menuMatchLength(m, pathname)));
+        {menu.map(({ key, label, href, icon: Icon, also }) => {
+          const best = Math.max(...menu.map((m) => menuMatchLength(m, pathname)));
           const active = best > 0 && menuMatchLength({ key, label, href, icon: Icon, also }, pathname) === best;
           return (
             <li key={key} className="flex-1">

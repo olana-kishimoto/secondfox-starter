@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "@/lib/redirect";
 import { createClient } from "@/lib/supabase/server";
+import { getMyPerms, can } from "@/lib/perm";
 import { toUserMessage } from "@/lib/errors/db-error";
 import { nullableString, parseNumber, validateDateInput } from "@/lib/format";
 import { CASE_STATUS } from "@/lib/labels";
@@ -37,6 +38,8 @@ function parse(formData: FormData): Parsed {
 }
 
 export async function createCase(formData: FormData) {
+  const perms = await getMyPerms();
+  if (!can(perms, "cases", "edit")) redirect("/");
   const p = parse(formData);
   if (!p.ok) redirect(`/cases/new?error=${p.error}`);
   const sb = await createClient();
@@ -47,6 +50,8 @@ export async function createCase(formData: FormData) {
 }
 
 export async function updateCase(id: string, formData: FormData) {
+  const perms = await getMyPerms();
+  if (!can(perms, "cases", "edit")) redirect("/");
   const p = parse(formData);
   if (!p.ok) redirect(`/cases/${id}?error=${p.error}`);
   const sb = await createClient();
@@ -58,6 +63,8 @@ export async function updateCase(id: string, formData: FormData) {
 
 // 状態だけを変える（一覧から1操作で済む「完了にする」など）。
 export async function setCaseStatus(id: string, status: string) {
+  const perms = await getMyPerms();
+  if (!can(perms, "cases", "edit")) redirect(`/cases/${id}?error=権限がありません`);
   if (!CASE_STATUS[status]) redirect(`/cases/${id}?error=状態が正しくありません`);
   const sb = await createClient();
   const { error } = await sb.from("cases").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
@@ -67,6 +74,8 @@ export async function setCaseStatus(id: string, status: string) {
 }
 
 export async function deleteCase(id: string) {
+  const perms = await getMyPerms();
+  if (!can(perms, "cases", "manage")) redirect(`/cases/${id}?error=権限がありません`);
   const sb = await createClient();
   const { error } = await sb.from("cases").delete().eq("id", id);
   if (error) redirect(`/cases/${id}?error=${toUserMessage(error)}`);
