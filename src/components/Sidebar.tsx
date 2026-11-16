@@ -3,22 +3,23 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { MAIN_MENU, menuMatchLength, type MenuItem } from "@/lib/menu";
+import { MAIN_MENU, menuMatchLength } from "@/lib/menu";
 import { IconSidebarCollapse, IconLogout } from "@/components/icons";
 import { logout } from "@/app/login/actions";
 import { APP_NAME, APP_SUB } from "@/lib/app-info";
+import { can, type Perms } from "@/lib/can";
 
 export function Sidebar({
   email,
   onCollapse,
-  items,
+  perms,
 }: {
   email?: string | null;
   onCollapse?: () => void;
-  items?: MenuItem[];
+  perms?: Perms;
 }) {
   const pathname = usePathname();
-  const menu = items ?? MAIN_MENU;
+  const menu = MAIN_MENU.filter((m) => !m.feature || can(perms ?? {}, m.feature, m.minLevel ?? "view"));
 
   const groups = Array.from(
     new Set(menu.filter((m) => !m.hidden).map((m) => m.group).filter((g): g is string => !!g)),

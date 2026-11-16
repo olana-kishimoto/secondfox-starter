@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { TAB_MENU, menuMatchLength, type MenuItem } from "@/lib/menu";
+import { TAB_MENU, menuMatchLength } from "@/lib/menu";
 import { cn } from "@/lib/cn";
+import { can, type Perms } from "@/lib/can";
 
-export function MobileTabBar({ items }: { items?: MenuItem[] }) {
+export function MobileTabBar({ perms }: { perms?: Perms }) {
   const pathname = usePathname();
-  const menu = items ?? TAB_MENU;
+  const menu = TAB_MENU.filter((m) => !m.feature || can(perms ?? {}, m.feature, m.minLevel ?? "view"));
 
   return (
     <nav
