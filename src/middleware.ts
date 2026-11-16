@@ -140,7 +140,11 @@ export async function middleware(request: NextRequest) {
     const next = safeNext(form.get("next"));
     const input = (form.get("key") ?? "").trim();
     const value = secret && input.length === KEY_LEN ? await hmac(input, secret) : "";
-    if (!value || !(await matches(value, secret))) {
+    let gateOk = false;
+    if (value) {
+      try { gateOk = await matches(value, secret); } catch { gateOk = false; }
+    }
+    if (!gateOk) {
       await new Promise((r) => setTimeout(r, 1000)); // 総当たりを遅くする
       return accessPage(next, true, 403);
     }
@@ -151,7 +155,14 @@ export async function middleware(request: NextRequest) {
 
   // ① 入口：署名つき Cookie があるか（IP 素通りなら省く）
   const cookieVal = request.cookies.get(COOKIE)?.value ?? "";
-  const passed = !enabled || ipPassthrough || (!!secret && !!cookieVal && (await matches(cookieVal, secret)));
+  let passed: boolean;
+  if (!enabled || ipPassthrough) {
+    passed = true;
+  } else if (!secret || !cookieVal) {
+    passed = false; // secret 未設定または Cookie なし → 安全に弾く（クラッシュしない）
+  } else {
+    try { passed = await matches(cookieVal, secret); } catch { passed = false; }
+  }
   if (!passed) {
     const accept = request.headers.get("accept") ?? "";
     if (request.method === "GET" && accept.includes("text/html")) {

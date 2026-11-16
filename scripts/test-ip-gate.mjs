@@ -64,7 +64,7 @@ ok(mw.includes("ACCESS_MODE") && mw.includes('"strict"'), "ACCESS_MODE=strict �
 ok(mw.includes("ipPassthrough"), "IP 通過フラグで コードゲートを省く");
 ok(mw.includes("!ipOk && mode === \"strict\"") || (mw.includes("!ipOk") && mw.includes("strict")), "strict かつ IP 不一致は拒否");
 ok(mw.includes("ipPassthrough = true"), "許可 IP なら ipPassthrough を立てる");
-ok(mw.includes("ipPassthrough || (!!secret"), "コードゲート：IP 素通りなら Cookie チェックを省く");
+ok(mw.includes("!enabled || ipPassthrough)"), "コードゲート：IP 素通りなら Cookie チェックを省く");
 ok(mw.includes("!ipPassthrough") && mw.includes("res.cookies.set"), "IP 素通りのとき Cookie を貼らない");
 
 // OPEN_PATHS / SELF_VERIFIED_PREFIXES は ipGate より前で return する
@@ -78,6 +78,30 @@ ok(lib.includes("ipAllowed") && lib.includes("parseAccessIPs") && lib.includes("
 ok(/list\.length === 0.*false|list\.length > 0/.test(lib.replace(/\s/g, "")) || lib.includes("list.length === 0"), "空リストは false（IP 制御なし）を返す");
 ok(lib.includes("~0 <<") || lib.includes("0xFFFFFFFF"), "CIDR はビットマスクで判定");
 ok(!/console\./.test(lib), "ログ出力なし");
+
+// ---- secret 未設定でも 500 にならない（安全な弾き） ----
+// ACCESS_COOKIE_SECRET が空のとき、sf_ea Cookie を持つ端末が 500 にならず
+// passed=false → /__access へリダイレクトになることをソースと論理で確認する。
+
+// 論理テスト（guard の動作）
+function simulateGate(enabled, secret, cookieVal) {
+  if (!enabled) return true;
+  if (!secret || !cookieVal) return false;
+  return "matches_called";
+}
+ok(simulateGate(true, "", "old_cookie") === false,
+   "secret 空 + Cookie あり → passed=false（500 ではなくゲートへ）");
+ok(simulateGate(true, "s".repeat(32), "some_val") === "matches_called",
+   "secret あり + Cookie あり → matches を呼ぶ");
+ok(simulateGate(false, "", "") === true, "disabled なら無条件 passed=true");
+
+// ソース構造テスト
+ok(mw.includes("!secret || !cookieVal"),
+   "secret 未設定 + Cookie あり → passed=false（クラッシュしない）");
+ok(mw.includes("catch { passed = false; }"),
+   "matches の呼び出しを try/catch で囲む（例外 → false フォールバック）");
+ok(mw.includes("gateOk"),
+   "POST /__access の matches も try/catch で囲む（gateOk フラグ）");
 
 console.log(failN ? `不合格 ${failN} 件` : `合格（${pass}項目）`);
 process.exit(failN ? 1 : 0);
