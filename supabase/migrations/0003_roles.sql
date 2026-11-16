@@ -1,108 +1,285 @@
--- 0003 役割による権限分離の土台（認証の内側の、さらに細かい出し分け）。
+-- 0003 権限マスタ：ユーザー管理・役割・機能ごとのアクセス制御。
+-- 追加のみ・冪等（何度流しても同じ結果）。
+-- 0002 の「authenticated全部可」ポリシーをfeatureベースのRLSに置き換える。
 --
--- 入口の合言葉・ログイン・0002 の RLS（ログイン済みなら業務テーブルを読み書きできる）は、そのまま変えない。
--- ここは「その上に足す」だけ：役割をデータとして持ち、表ごとに「この役割だけ」と閉じられる型を用意する。
+--   roles              役割（管理者・担当者・閲覧など）
+--   features           画面・機能キー（ハーネスが画面を足したらinsertする運用）
+--   role_permissions   役割×機能のアクセス水準（none/view/edit/manage）
+--   profiles           Auth利用者と役割の紐付け
 --
---   roles     役割の一覧（データ。決め打ちの enum にしない）。admin だけは予約の特別役割＝全部見える。
---   profiles  利用者ごとの役割（1人1役割）。行が無い利用者は「役割なし」。
---   app_role() / app_is_admin() / app_has_role(keys)  ポリシーから使う判定。
---   sample_notes  役割で閉じる表の見本（型）。実際の業務の表は、各システムが同じ書き方で足す。
+-- 権限判定：
+--   current_level(feature) → 'none'|'view'|'edit'|'manage'（is_systemロールは常に'manage'）
+--   has_level(feature, min) → boolean（none < view < edit < manage）
+--   my_perms() → jsonb（全feature→levelのマップ、1往復で取れる）
 --
--- 役割の割り当ては管理者だけ（自己登録なし・自分で役割を上げられない）。最初の管理者は、新規作成時に
--- サーバー側（service_role）で profiles に入れる（README「役割と権限」）。
--- 何度流しても同じ結果になる。
+-- 注意: GRANTはauthenticated/service_roleに付け直す（Supabase 2024-10以降、public schemaの新テーブルは既定で非公開）。
 
 begin;
 
--- ---- 役割の一覧 ----
+-- ── テーブル ──────────────────────────────────────────────────
+
 create table if not exists roles (
-  key        text primary key check (key ~ '^[a-z][a-z0-9_]{1,30}$'),
-  label      text not null check (char_length(label) between 1 and 40),
-  sort       integer not null default 100,
+  id         uuid primary key default gen_random_uuid(),
+  name       text unique not null,
+  is_system  boolean not null default false,
   created_at timestamptz not null default now()
 );
 
--- ---- 利用者ごとの役割 ----
+-- features: 画面・機能のキー一覧。ハーネスが画面を足したら insert する運用（コメントで明記）。
+create table if not exists features (
+  key   text primary key,
+  label text not null,
+  grp   text,
+  sort  int not null default 0
+);
+
+create table if not exists role_permissions (
+  role_id     uuid references roles(id) on delete cascade,
+  feature_key text references features(key) on delete cascade,
+  level       text not null check (level in ('none', 'view', 'edit', 'manage')),
+  primary key (role_id, feature_key)
+);
+
 create table if not exists profiles (
   user_id    uuid primary key references auth.users(id) on delete cascade,
-  role       text not null references roles(key) on update cascade on delete restrict,
-  updated_at timestamptz not null default now(),
-  updated_by uuid
-);
-create index if not exists profiles_role_idx on profiles (role);
-
-alter table roles enable row level security;
-alter table profiles enable row level security;
-
--- ---- 判定（ポリシーから呼ぶ）----
--- security definer：profiles 自身の RLS を通さずに、ログイン中の利用者の役割だけを読む（ポリシーの自己参照・再帰を避ける）。
--- 戻すのは「自分の」役割だけ。search_path を固定する。
-create or replace function app_role() returns text
-  language sql stable security definer set search_path = public as
-$$ select role from public.profiles where user_id = auth.uid() $$;
-
-create or replace function app_is_admin() returns boolean
-  language sql stable security definer set search_path = public as
-$$ select coalesce((select role = 'admin' from public.profiles where user_id = auth.uid()), false) $$;
-
--- 管理者は常に true。それ以外は、渡した役割のどれかに当たるとき true。役割なしは false。
-create or replace function app_has_role(keys text[]) returns boolean
-  language sql stable security definer set search_path = public as
-$$ select coalesce((select role = 'admin' or role = any(keys) from public.profiles where user_id = auth.uid()), false) $$;
-
-revoke all on function app_role(), app_is_admin(), app_has_role(text[]) from public, anon;
-grant execute on function app_role(), app_is_admin(), app_has_role(text[]) to authenticated, service_role;
-
--- ---- roles / profiles のポリシー ----
--- roles：ログイン済みなら一覧を読める（画面の名前表示用）。足す・直す・消すは管理者だけ。admin の行は固定。
-drop policy if exists roles_read on roles;
-create policy roles_read on roles for select to authenticated using (true);
-drop policy if exists roles_admin_insert on roles;
-create policy roles_admin_insert on roles for insert to authenticated with check (app_is_admin() and key <> 'admin');
-drop policy if exists roles_admin_update on roles;
-create policy roles_admin_update on roles for update to authenticated using (app_is_admin() and key <> 'admin') with check (app_is_admin() and key <> 'admin');
-drop policy if exists roles_admin_delete on roles;
-create policy roles_admin_delete on roles for delete to authenticated using (app_is_admin() and key <> 'admin');
-
--- profiles：自分の行は読める。管理者は全員ぶん読み書きできる。自分で自分の役割は変えられない（管理者でなければ書けない）。
-drop policy if exists profiles_read on profiles;
-create policy profiles_read on profiles for select to authenticated using (user_id = auth.uid() or app_is_admin());
-drop policy if exists profiles_admin_insert on profiles;
-create policy profiles_admin_insert on profiles for insert to authenticated with check (app_is_admin());
-drop policy if exists profiles_admin_update on profiles;
-create policy profiles_admin_update on profiles for update to authenticated using (app_is_admin()) with check (app_is_admin());
-drop policy if exists profiles_admin_delete on profiles;
-create policy profiles_admin_delete on profiles for delete to authenticated using (app_is_admin());
-
--- ---- 役割で閉じる表の見本（型）----
--- 読む：管理者と、列挙した役割（ここでは staff）だけ。役割なしは読めない。
--- 書く：管理者だけ。
--- 各システムは、業務の表に同じ形でポリシーを書く。役割名は各システムが決める。例（差し替える例）：
---   using (app_has_role(array['sales']))              … 営業と管理者だけ読める
---   using (app_has_role(array['accounting']))         … 経理と管理者だけ読める
---   using (app_has_role(array['sales','accounting'])) … 営業・経理・管理者が読める
--- 既存の cases / customers は 0002 のまま（ログイン済みなら全員）。絞りたい表だけ、ポリシーを作り直す。
-create table if not exists sample_notes (
-  id         uuid primary key default gen_random_uuid(),
-  title      text not null,
-  body       text not null default '',
+  role_id    uuid references roles(id),
+  active     boolean not null default true,
+  email      text,
   created_at timestamptz not null default now()
 );
-alter table sample_notes enable row level security;
 
-drop policy if exists sample_notes_read on sample_notes;
-create policy sample_notes_read on sample_notes for select to authenticated using (app_has_role(array['staff']));
-drop policy if exists sample_notes_admin_write on sample_notes;
-create policy sample_notes_admin_write on sample_notes for all to authenticated using (app_is_admin()) with check (app_is_admin());
+-- ── RLS有効化 ─────────────────────────────────────────────────
 
--- ---- 明示の権限（anon には何も与えない）----
-revoke all on roles, profiles, sample_notes from anon, public;
-grant select, insert, update, delete on roles, profiles, sample_notes to authenticated;
-grant all on roles, profiles, sample_notes to service_role;
+alter table roles enable row level security;
+alter table features enable row level security;
+alter table role_permissions enable row level security;
+alter table profiles enable row level security;
 
--- ---- 既定の種：汎用の2役割だけ ----
--- 営業・経理などの業種の役割は入れない。各システムが roles に足す（例：('sales','営業') ('accounting','経理')）。
-insert into roles (key, label, sort) values ('admin', '管理者', 0), ('staff', '担当者', 10)
+-- ── GRANT（新テーブルはデフォルト非公開のため明示する） ────────
+
+revoke all on roles, features, role_permissions, profiles from anon, public;
+grant select, insert, update, delete on roles, features, role_permissions, profiles to authenticated;
+grant all on roles, features, role_permissions, profiles to service_role;
+
+-- ── 権限判定関数 ──────────────────────────────────────────────
+
+create or replace function current_level(feature text)
+returns text
+language sql
+security definer
+set search_path = public
+as $$
+  select case
+    when exists (
+      select 1 from profiles p
+      join roles r on r.id = p.role_id
+      where p.user_id = auth.uid() and r.is_system = true and p.active = true
+    ) then 'manage'
+    else coalesce(
+      (select rp.level
+       from profiles p
+       join role_permissions rp on rp.role_id = p.role_id
+       where p.user_id = auth.uid() and p.active = true and rp.feature_key = feature),
+      'none'
+    )
+  end;
+$$;
+
+create or replace function has_level(feature text, min text)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select array_position(array['none','view','edit','manage']::text[], current_level(feature))
+      >= array_position(array['none','view','edit','manage']::text[], min);
+$$;
+
+-- 全feature→levelのマップ（1往復で取れる、TypeScriptのgetMyPerms()で使う）
+create or replace function my_perms()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    jsonb_object_agg(f.key, current_level(f.key)),
+    '{}'::jsonb
+  )
+  from features f;
+$$;
+
+-- ── 初期シード（役割・機能） ──────────────────────────────────
+
+-- features: 画面を足したら insert するたびにここに追記する
+insert into features (key, label, grp, sort) values
+  ('cases',     '案件',         '業務', 10),
+  ('customers', '顧客マスタ',   '業務', 20),
+  ('users',     'ユーザー管理', '設定', 30),
+  ('roles',     '権限マスタ',   '設定', 40)
 on conflict (key) do nothing;
+
+-- roles: 管理者（is_system=true）・担当者・閲覧
+insert into roles (id, name, is_system) values
+  ('00000000-0000-4000-9000-000000000001', '管理者', true),
+  ('00000000-0000-4000-9000-000000000002', '担当者', false),
+  ('00000000-0000-4000-9000-000000000003', '閲覧',   false)
+on conflict (id) do nothing;
+
+-- 管理者：全feature manage
+insert into role_permissions (role_id, feature_key, level)
+select '00000000-0000-4000-9000-000000000001', key, 'manage' from features
+on conflict (role_id, feature_key) do nothing;
+
+-- 担当者：cases=edit, customers=view, users=none, roles=none
+insert into role_permissions (role_id, feature_key, level) values
+  ('00000000-0000-4000-9000-000000000002', 'cases',     'edit'),
+  ('00000000-0000-4000-9000-000000000002', 'customers', 'view'),
+  ('00000000-0000-4000-9000-000000000002', 'users',     'none'),
+  ('00000000-0000-4000-9000-000000000002', 'roles',     'none')
+on conflict (role_id, feature_key) do nothing;
+
+-- 閲覧：全feature view
+insert into role_permissions (role_id, feature_key, level)
+select '00000000-0000-4000-9000-000000000003', key, 'view' from features
+on conflict (role_id, feature_key) do nothing;
+
+-- ── トリガ：Auth利用者が登録されたら自動でprofiles作成 ─────────
+
+create or replace function _auto_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into profiles (user_id, role_id, email)
+  values (
+    new.id,
+    case when new.raw_app_meta_data->>'role' = 'admin'
+      then '00000000-0000-4000-9000-000000000001'
+      else '00000000-0000-4000-9000-000000000002'
+    end,
+    new.email
+  )
+  on conflict (user_id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists auto_profile on auth.users;
+create trigger auto_profile
+  after insert on auth.users
+  for each row execute function _auto_profile();
+
+-- 既存ユーザーにprofilesが無ければ作る（冪等）
+insert into profiles (user_id, role_id, email)
+select
+  u.id,
+  case when u.raw_app_meta_data->>'role' = 'admin'
+    then '00000000-0000-4000-9000-000000000001'
+    else '00000000-0000-4000-9000-000000000002'
+  end,
+  u.email
+from auth.users u
+on conflict (user_id) do nothing;
+
+-- ── RLSポリシー（0002の「認証済み全部可」を置き換え） ────────────
+
+-- customers（0002のpolicyを削除して新しいものに）
+drop policy if exists customers_staff on customers;
+
+drop policy if exists customers_read on customers;
+create policy customers_read on customers
+  for select to authenticated
+  using (has_level('customers', 'view'));
+
+drop policy if exists customers_write on customers;
+create policy customers_write on customers
+  for insert to authenticated
+  with check (has_level('customers', 'edit'));
+
+drop policy if exists customers_update on customers;
+create policy customers_update on customers
+  for update to authenticated
+  using (has_level('customers', 'edit'))
+  with check (has_level('customers', 'edit'));
+
+drop policy if exists customers_delete on customers;
+create policy customers_delete on customers
+  for delete to authenticated
+  using (has_level('customers', 'manage'));
+
+-- cases（0002のpolicyを削除して新しいものに）
+drop policy if exists cases_staff on cases;
+
+drop policy if exists cases_read on cases;
+create policy cases_read on cases
+  for select to authenticated
+  using (has_level('cases', 'view'));
+
+drop policy if exists cases_write on cases;
+create policy cases_write on cases
+  for insert to authenticated
+  with check (has_level('cases', 'edit'));
+
+drop policy if exists cases_update on cases;
+create policy cases_update on cases
+  for update to authenticated
+  using (has_level('cases', 'edit'))
+  with check (has_level('cases', 'edit'));
+
+drop policy if exists cases_delete on cases;
+create policy cases_delete on cases
+  for delete to authenticated
+  using (has_level('cases', 'manage'));
+
+-- roles
+drop policy if exists roles_read on roles;
+create policy roles_read on roles
+  for select to authenticated
+  using (has_level('roles', 'view'));
+
+drop policy if exists roles_write on roles;
+create policy roles_write on roles
+  for all to authenticated
+  using (has_level('roles', 'manage'))
+  with check (has_level('roles', 'manage'));
+
+-- features
+drop policy if exists features_read on features;
+create policy features_read on features
+  for select to authenticated
+  using (has_level('roles', 'view'));
+
+drop policy if exists features_write on features;
+create policy features_write on features
+  for all to authenticated
+  using (has_level('roles', 'manage'))
+  with check (has_level('roles', 'manage'));
+
+-- role_permissions
+drop policy if exists role_permissions_read on role_permissions;
+create policy role_permissions_read on role_permissions
+  for select to authenticated
+  using (has_level('roles', 'view'));
+
+drop policy if exists role_permissions_write on role_permissions;
+create policy role_permissions_write on role_permissions
+  for all to authenticated
+  using (has_level('roles', 'manage'))
+  with check (has_level('roles', 'manage'));
+
+-- profiles
+drop policy if exists profiles_read on profiles;
+create policy profiles_read on profiles
+  for select to authenticated
+  using (has_level('users', 'view'));
+
+drop policy if exists profiles_write on profiles;
+create policy profiles_write on profiles
+  for all to authenticated
+  using (has_level('users', 'manage'))
+  with check (has_level('users', 'manage'));
 
 commit;

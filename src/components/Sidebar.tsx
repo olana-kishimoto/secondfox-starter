@@ -3,32 +3,31 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { menuFor } from "@/lib/menu";
+import { MAIN_MENU, menuMatchLength, type MenuItem } from "@/lib/menu";
 import { IconSidebarCollapse, IconLogout } from "@/components/icons";
 import { logout } from "@/app/login/actions";
 import { APP_NAME, APP_SUB } from "@/lib/app-info";
-import { menuMatchLength } from "@/lib/menu";
 
 export function Sidebar({
   email,
-  role,
   onCollapse,
+  items,
 }: {
   email?: string | null;
-  role?: string | null;
   onCollapse?: () => void;
+  items?: MenuItem[];
 }) {
   const pathname = usePathname();
-  const MAIN_MENU = menuFor(role);   // 役割で出し分け（見た目だけ。守るのは RLS とサーバーの判定）
+  const menu = items ?? MAIN_MENU;
 
   const groups = Array.from(
-    new Set(MAIN_MENU.filter((m) => !m.hidden).map((m) => m.group).filter((g): g is string => !!g)),
+    new Set(menu.filter((m) => !m.hidden).map((m) => m.group).filter((g): g is string => !!g)),
   );
 
   // 前方一致でぶつかる項目（例: /cases と /cases/new）は「最長一致」だけを点灯
   const activeHref = (() => {
     let best: { href: string; len: number } | null = null;
-    for (const m of MAIN_MENU) {
+    for (const m of menu) {
       const len = menuMatchLength(m, pathname);
       if (len > 0 && (!best || len > best.len)) best = { href: m.href, len };
     }
@@ -37,7 +36,7 @@ export function Sidebar({
 
   // アクティブ項目が属するグループを初期開放
   const activeGroup =
-    MAIN_MENU.find((m) => m.href === activeHref)?.group ?? groups[0] ?? null;
+    menu.find((m) => m.href === activeHref)?.group ?? groups[0] ?? null;
 
   const [openGroup, setOpenGroup] = useState<string | null>(activeGroup);
 
@@ -80,7 +79,7 @@ export function Sidebar({
       {/* グループ（アコーディオン） */}
       {groups.map((group) => {
         const isOpen = openGroup === group;
-        const items = MAIN_MENU.filter((m) => m.group === group && !m.hidden);
+        const groupItems = menu.filter((m) => m.group === group && !m.hidden);
         return (
           <div key={group} className="mt-4">
             <button
@@ -94,7 +93,7 @@ export function Sidebar({
 
             {isOpen && (
               <div>
-                {items.map((item) => {
+                {groupItems.map((item) => {
                   const active = item.href === activeHref;
                   const Icon = item.icon;
                   return (

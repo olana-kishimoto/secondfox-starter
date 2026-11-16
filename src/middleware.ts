@@ -86,23 +86,27 @@ function accessPage(next: string, failed: boolean, status = 200): Response {
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif;background:#edece7;color:#454545;display:flex;min-height:100svh;align-items:center;justify-content:center;padding:16px}
-form{background:#fff;border:1px solid #e2e1db;border-radius:6px;padding:32px;width:100%;max-width:340px}
-h1{font-size:12px;font-weight:600;letter-spacing:.14em;color:#8a8a86;margin-bottom:20px}
-label{display:block;font-size:10px;letter-spacing:.14em;color:#8a8a86;margin-bottom:4px}
-input[type=password]{display:block;width:100%;border:1px solid #e2e1db;border-radius:4px;padding:7px 12px;font-size:14px;color:#454545;outline:none;background:#fff;font-variant-numeric:tabular-nums}
+.card{background:#fff;border:1px solid #e2e1db;border-radius:10px;padding:36px 32px;width:100%;max-width:360px}
+h1{font-size:16px;font-weight:600;color:#1a1a1a;margin-bottom:8px;line-height:1.5}
+.sub{font-size:12px;color:#8a8a86;line-height:1.7;margin-bottom:24px}
+label{display:block;font-size:12px;font-weight:600;color:#454545;margin-bottom:6px}
+input[type=password]{display:block;width:100%;border:1px solid #e2e1db;border-radius:6px;padding:9px 12px;font-size:14px;color:#454545;outline:none;background:#fff;font-variant-numeric:tabular-nums}
 input[type=password]:focus{border-color:#9a1a3c;box-shadow:0 0 0 3px rgba(154,26,60,.12)}
 .e{font-size:12px;color:#9a1a3c;margin-top:8px}
-button{margin-top:14px;width:100%;background:#9a1a3c;color:#fff;border:none;border-radius:4px;padding:9px 12px;font-size:13px;letter-spacing:.06em;cursor:pointer}
+button{margin-top:16px;width:100%;background:#9a1a3c;color:#fff;border:none;border-radius:6px;padding:10px 12px;font-size:14px;font-weight:600;letter-spacing:.04em;cursor:pointer;font-family:inherit}
 button:hover{background:#7a142f}
 </style></head><body>
+<div class="card">
 <form method="POST" action="/__access">
 <input type="hidden" name="next" value="${esc(next)}">
-<h1>合言葉の入力</h1>
-<label for="k">合言葉（32桁）</label>
+<h1>このページを開くには合言葉が必要です</h1>
+<p class="sub">担当者からお伝えした合言葉を入力してください。分からないときは、ご案内した担当者にご確認ください。</p>
+<label for="k">合言葉</label>
 <input type="password" id="k" name="key" maxlength="64" autocomplete="off" autofocus required>
-${failed ? '<p class="e">合言葉が正しくありません。</p>' : ""}
+${failed ? '<p class="e">合言葉が違うようです。もう一度ご確認ください。</p>' : ""}
 <button type="submit">次へ</button>
-</form></body></html>`;
+</form>
+</div></body></html>`;
   return new Response(html, { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
 

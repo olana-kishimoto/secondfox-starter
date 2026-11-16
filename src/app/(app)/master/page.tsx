@@ -3,6 +3,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SubNav } from "@/components/ui/SubNav";
 import { DataCard } from "@/components/ui/DataCard";
 import { createClient } from "@/lib/supabase/server";
+import { getMyPerms, can } from "@/lib/perm";
+import { redirect } from "@/lib/redirect";
 import { APP_NAME } from "@/lib/app-info";
 
 export const metadata: Metadata = { title: `マスタ — ${APP_NAME}` };
@@ -10,6 +12,9 @@ export const dynamic = "force-dynamic";
 
 // マスタ（見本：顧客）。マスタが増えたら SubNav のタブに足していく。
 export default async function MasterPage() {
+  const perms = await getMyPerms();
+  if (!can(perms, "customers", "view")) redirect("/");
+
   const sb = await createClient();
   const { data } = await sb.from("customers").select("id, name, contact, email").order("name");
 
