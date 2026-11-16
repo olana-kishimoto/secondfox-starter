@@ -101,3 +101,64 @@ button:not(:disabled):active,
 button:disabled {
   cursor: not-allowed;
 }
+
+/* ============================================================
+   master-table — マスタ・明細の一覧テーブル（data-label スマホ対応）
+   スマホ幅（< md）では thead を隠し、各セルを data-label で折り返す。
+   ============================================================ */
+.master-table {
+  width: 100%;
+  font-size: 13px;
+  border-collapse: collapse;
+}
+.master-table thead th {
+  padding: 10px 16px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.master-table tbody tr {
+  border-bottom: 1px solid var(--line);
+}
+.master-table tbody tr:last-child {
+  border-bottom: none;
+}
+.master-table tbody tr:hover {
+  background: color-mix(in srgb, var(--base) 60%, transparent);
+}
+.master-table tbody td {
+  padding: 11px 16px;
+  vertical-align: middle;
+}
+
+@media (max-width: 767px) {
+  .master-table thead {
+    display: none;
+  }
+  .master-table tbody tr {
+    display: block;
+    padding: 10px 0;
+  }
+  .master-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 16px;
+    gap: 12px;
+  }
+  .master-table tbody td::before {
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}
