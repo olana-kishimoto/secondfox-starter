@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SubNav } from "@/components/ui/SubNav";
+import { LinkButton } from "@/components/ui/Button";
+import { FlashMessage } from "@/components/ui/FlashMessage";
 import { createClient } from "@/lib/supabase/server";
 import { getMyPerms, can } from "@/lib/perm";
 import { redirect } from "@/lib/redirect";
@@ -10,7 +13,7 @@ import { IconSearch } from "@/components/icons";
 export const metadata: Metadata = { title: `マスタ — ${APP_NAME}` };
 export const dynamic = "force-dynamic";
 
-type SP = Promise<{ q?: string }>;
+type SP = Promise<{ q?: string; msg?: string; error?: string }>;
 
 // マスタ（見本：顧客）。マスタが増えたら SubNav のタブに足していく。
 export default async function MasterPage({ searchParams }: { searchParams: SP }) {
@@ -28,6 +31,7 @@ export default async function MasterPage({ searchParams }: { searchParams: SP })
   }
   const { data } = await query;
   const rows = data ?? [];
+  const canEdit = can(perms, "customers", "edit");
 
   return (
     <main className="px-4 py-6 md:px-8 md:py-8">
@@ -35,8 +39,10 @@ export default async function MasterPage({ searchParams }: { searchParams: SP })
         eyebrow="Settings"
         title="マスタ"
         description="業務で選ぶ項目のもとになるデータです。"
+        right={canEdit ? <LinkButton href="/master/new">＋ 登録</LinkButton> : undefined}
       />
       <SubNav items={[{ label: "顧客", href: "/master" }]} />
+      <FlashMessage msg={sp.msg} error={sp.error} />
 
       {/* 検索 */}
       <form method="GET" className="mb-4 flex items-center gap-2">
@@ -80,8 +86,15 @@ export default async function MasterPage({ searchParams }: { searchParams: SP })
           </thead>
           <tbody>
             {rows.map((c) => (
-              <tr key={c.id}>
-                <td data-label="会社名" className="font-medium text-text">{c.name}</td>
+              <tr key={c.id} className="hover:bg-base/50 transition-colors">
+                <td data-label="会社名">
+                  <Link
+                    href={`/master/${c.id}`}
+                    className="font-medium text-text hover:text-accent hover:underline"
+                  >
+                    {c.name}
+                  </Link>
+                </td>
                 <td data-label="担当者" className="text-muted">{c.contact ?? "—"}</td>
                 <td data-label="メール" className="text-muted">{c.email ?? "—"}</td>
               </tr>
