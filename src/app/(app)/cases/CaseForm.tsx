@@ -11,6 +11,7 @@ import { CASE_STATUS } from "@/lib/labels";
 import { foldIncludes } from "@/lib/fold-search";
 import { preventImplicitSubmit } from "@/lib/prevent-implicit-submit";
 import { IconSearch } from "@/components/icons";
+import { FlashMessage } from "@/components/ui/FlashMessage";
 import type { FormState } from "@/lib/form-state";
 import { deleteCase, setCaseStatus } from "./actions";
 
@@ -91,7 +92,7 @@ export function CaseForm({
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {state.formError && (
-        <div className="notice bad lg:col-span-3">{state.formError}</div>
+        <div className="lg:col-span-3"><FlashMessage error={state.formError} /></div>
       )}
       <form
         ref={formRef}

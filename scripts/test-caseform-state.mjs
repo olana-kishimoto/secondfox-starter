@@ -93,6 +93,13 @@ console.log("\ncases/[id]/page.tsx");
   ok(src.includes("updateCase(c.id, prev, formData)"), "updateCase を (id, prev, formData) で呼んでいる");
 }
 
+// ---- Field.tsx ----
+console.log("\nField.tsx");
+{
+  const src = rd("src/components/ui/Field.tsx");
+  ok(src.includes("`err-${htmlFor}`"), "Field のエラー <p> に id={htmlFor ? `err-${htmlFor}` : undefined} が付いている");
+}
+
 // ---- cases/new/page.tsx ----
 console.log("\ncases/new/page.tsx");
 {

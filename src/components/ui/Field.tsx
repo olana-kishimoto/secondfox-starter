@@ -55,7 +55,7 @@ export function Field({
         <p className="mt-0.5 text-[11px] leading-[1.6] text-muted">{hint}</p>
       )}
       {error && (
-        <p className="mt-0.5 text-[11px] leading-[1.6] text-bad">{error}</p>
+        <p id={htmlFor ? `err-${htmlFor}` : undefined} className="mt-0.5 text-[11px] leading-[1.6] text-bad">{error}</p>
       )}
     </div>
   );
