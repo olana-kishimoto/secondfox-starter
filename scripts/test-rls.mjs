@@ -186,6 +186,7 @@ const ALL_MIGRATIONS = [
   '0003_roles.sql',
   '0004_master_customers.sql',
   '0005_orders.sql',
+  '0006_order_save.sql',
 ];
 
 // 受注テスト用 UUID
@@ -377,6 +378,94 @@ console.log('\nG. 担当者（orders=edit, manage は不可）');
   test('orders DELETE が拒否される（担当者 manage が必要）', () => assert.equal(delOrd.ok, false));
   test('order_items INSERT が通る（担当者=edit）',    () => assert.equal(insItem.ok, true));
   test('order_items DELETE が通る（担当者 edit で可）',() => assert.equal(delItem.ok, true));
+}
+
+// ── H. save_order RPC — 権限ゲート確認 ──────────────────────────────────────
+// security invoker + has_level 明示チェックにより、閲覧ロールは例外で弾かれる。
+// 担当者は新規作成・更新とも正常終了する。
+console.log('\nH. save_order RPC（閲覧ロール=拒否、担当者=通過）');
+
+// save_order 呼び出しヘルパー（items は jsonb 文字列）
+function saveOrderSql({ p_id, p_customer_id, p_order_date, p_status, p_memo, p_items, p_expected }) {
+  const id      = p_id      ? `'${p_id}'::uuid`              : 'null::uuid';
+  const cust    = p_customer_id ? `'${p_customer_id}'::uuid` : 'null::uuid';
+  const expUpd  = p_expected ? `'${p_expected}'::timestamptz` : 'null::timestamptz';
+  const itemsJ  = JSON.stringify(p_items).replace(/'/g, "''");
+  return `select save_order(${id}, ${cust}, '${p_order_date}'::date, '${p_status}', '${p_memo}', '${itemsJ}'::jsonb, ${expUpd})`;
+}
+
+const ITEM_PAYLOAD = [{ product_id: null, name: 'テスト品', qty: 1, unit_price: 500 }];
+
+{
+  const db = await buildDb(ALL_MIGRATIONS);
+  await seedUsers(db);
+  // 閲覧ロールユーザーを作成（auto_profile で担当者になるため update で上書き）
+  await db.exec(`
+    insert into auth.users (id, email, raw_app_meta_data) values
+      ('${KIRAN_ID}', 'kiran@test.local', '{}')
+    on conflict (id) do nothing;
+    update profiles set role_id = '00000000-0000-4000-9000-000000000003'
+    where user_id = '${KIRAN_ID}';
+  `);
+  await seedData(db);
+
+  // ── 閲覧ロール ────────────────────────────────────────────────────────────
+  // 新規作成：has_level 明示チェックで例外
+  const kiranCreate = await asUser(db, KIRAN_ID, d => tryOp(() =>
+    d.query(saveOrderSql({
+      p_id: null, p_customer_id: CUST_ID, p_order_date: '2025-01-01',
+      p_status: 'draft', p_memo: '', p_items: ITEM_PAYLOAD, p_expected: null,
+    }))
+  ));
+  // 既存更新：has_level 明示チェックで例外
+  const kiranUpdate = await asUser(db, KIRAN_ID, d => tryOp(() =>
+    d.query(saveOrderSql({
+      p_id: ORDER_ID, p_customer_id: CUST_ID, p_order_date: '2025-01-01',
+      p_status: 'draft', p_memo: '', p_items: ITEM_PAYLOAD, p_expected: null,
+    }))
+  ));
+
+  // ── 担当者 ────────────────────────────────────────────────────────────────
+  // 新規作成
+  const tantouCreate = await asUser(db, TANTOU_ID, d => tryOp(async () => {
+    const r = await d.query(saveOrderSql({
+      p_id: null, p_customer_id: CUST_ID, p_order_date: '2025-01-15',
+      p_status: 'draft', p_memo: 'テスト', p_items: ITEM_PAYLOAD, p_expected: null,
+    }));
+    const res = r.rows[0]?.save_order ?? r.rows[0]?.save_order;
+    if (!res || res.result !== 'ok') throw new Error(`result=${JSON.stringify(res)}`);
+  }));
+  // 既存更新（expected_updated_at は null で競合チェックなし）
+  const tantouUpdate = await asUser(db, TANTOU_ID, d => tryOp(async () => {
+    const r = await d.query(saveOrderSql({
+      p_id: ORDER_ID, p_customer_id: CUST_ID, p_order_date: '2025-02-01',
+      p_status: 'draft', p_memo: '更新', p_items: ITEM_PAYLOAD, p_expected: null,
+    }));
+    const key = Object.keys(r.rows[0])[0];
+    const res = r.rows[0][key];
+    if (!res || res.result !== 'ok') throw new Error(`result=${JSON.stringify(res)}`);
+  }));
+  // 競合検出：存在しない expected_updated_at を渡す → result='conflict'
+  const tantouConflict = await asUser(db, TANTOU_ID, d => tryOp(async () => {
+    const r = await d.query(saveOrderSql({
+      p_id: ORDER_ID, p_customer_id: CUST_ID, p_order_date: '2025-03-01',
+      p_status: 'draft', p_memo: '', p_items: ITEM_PAYLOAD, p_expected: '2000-01-01T00:00:00Z',
+    }));
+    const key = Object.keys(r.rows[0])[0];
+    const res = r.rows[0][key];
+    if (!res || res.result !== 'conflict') throw new Error(`expected conflict, got ${JSON.stringify(res)}`);
+  }));
+
+  test('閲覧ロールが save_order で新規作成できない（例外）',
+    () => assert.equal(kiranCreate.ok, false));
+  test('閲覧ロールが save_order で既存更新できない（例外）',
+    () => assert.equal(kiranUpdate.ok, false));
+  test('担当者が save_order で新規作成できる',
+    () => assert.equal(tantouCreate.ok, true));
+  test('担当者が save_order で既存更新できる',
+    () => assert.equal(tantouUpdate.ok, true));
+  test('担当者が save_order で競合を検出できる',
+    () => assert.equal(tantouConflict.ok, true));
 }
 
 // ── D. self-check（歯があることの確認）────────────────────────────────────
