@@ -77,6 +77,17 @@
   次にできる操作だけを1操作で出す。遷移はサーバで検証し、権限と現在状態で
   出し分ける。履歴が要る業務は履歴を残す。
 
+- 帳票（印刷）
+  帳票は A4 の .sheet（width:210mm・min-height:297mm・box-sizing:border-box）で作る。
+  box-sizing:border-box を省くと白紙になる（既知バグ）。
+  画面のナビ・サイドバー・印刷ボタンは @media print で隠し、.sheet だけを出力する。
+  明細行は break-inside:avoid で改ページにまたがらせない。
+  日付は Intl.DateTimeFormat + timeZone:"Asia/Tokyo" で整形する（UTC ずれ防止）。
+  金額は右寄せ・¥ 表示（formatYen）とする。
+  帳票には「発行日・宛先・合計・内訳」を必ず含める。
+  明細は発注時点のスナップショット（受注の name/unit_price）を使い、
+  マスタの現在値ではなく記録時点の値を表示する。
+
 ## C. 検査（ハーネス）が要求する対応物
 
 契約を文書で言うだけにせず、機械検査が同じ条件を落とす。

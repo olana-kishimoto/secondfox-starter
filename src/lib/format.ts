@@ -49,6 +49,20 @@ export function formatDateJST(value: string | null | undefined): string {
   });
 }
 
+// "YYYY-MM-DD" → "YYYY年MM月DD日"（帳票用・Asia/Tokyo 明示）
+// UTCずれ防止のため Intl.DateTimeFormat を使う。
+export function formatDateJP(date: string | null | undefined): string {
+  if (!date) return "—";
+  const m = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return "—";
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`));
+}
+
 // "YYYY-MM-DD" → "YYYY/MM/DD"
 export function formatDate(date: string | null | undefined): string {
   if (!date) return "—";
