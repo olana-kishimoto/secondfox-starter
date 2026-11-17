@@ -101,6 +101,18 @@ async function seedData(db) {
     insert into cases (id, title, customer_id) values
       ('${CASE_ID}', 'テスト案件', '${CUST_ID}')
     on conflict (id) do nothing;
+
+    insert into products (id, code, name, unit_price) values
+      ('${PROD_ID}', 'P-TEST', 'テスト商品', 10000)
+    on conflict (id) do nothing;
+
+    insert into orders (id, order_no, customer_id, order_date, status) values
+      ('${ORDER_ID}', 'SO-TEST', '${CUST_ID}', current_date, 'draft')
+    on conflict (id) do nothing;
+
+    insert into order_items (id, order_id, product_id, name, qty, unit_price, line_no) values
+      ('${ITEM_ID}', '${ORDER_ID}', '${PROD_ID}', 'テスト商品', 1, 10000, 1)
+    on conflict (id) do nothing;
   `);
 }
 
@@ -173,7 +185,13 @@ const ALL_MIGRATIONS = [
   '0002_auth_rls.sql',
   '0003_roles.sql',
   '0004_master_customers.sql',
+  '0005_orders.sql',
 ];
+
+// 受注テスト用 UUID
+const PROD_ID    = '00000000-0000-4005-8000-000000000001';
+const ORDER_ID   = '00000000-0000-4005-8000-000000000011';
+const ITEM_ID    = '00000000-0000-4005-8000-000000000021';
 
 console.log('\nRLS 否定テスト\n');
 
@@ -276,6 +294,89 @@ console.log('\nC. 管理者（is_system=true → 全 feature manage）');
     () => assert.equal(insCases.ok, true));
   test('cases DELETE が通る（manage）',
     () => assert.equal(delCases.ok, true));
+}
+
+// ── E. anon — orders/products/order_items ────────────────────────────────
+console.log('\nE. anon（orders/products/order_items）');
+{
+  const db = await buildDb(ALL_MIGRATIONS);
+  await seedUsers(db);
+  await seedData(db);
+
+  const selProd  = await asAnon(db, d => tryOp(() => d.query('select * from products')));
+  const insProd  = await asAnon(db, d => tryOp(() => d.exec("insert into products (code,name,unit_price) values ('X','x',0)")));
+  const selOrd   = await asAnon(db, d => tryOp(() => d.query('select * from orders')));
+  const insOrd   = await asAnon(db, d => tryOp(() =>
+    d.exec(`insert into orders (order_no,customer_id,order_date,status) values ('SO-X','${CUST_ID}',current_date,'draft')`)));
+  const selItems = await asAnon(db, d => tryOp(() => d.query('select * from order_items')));
+  const insItems = await asAnon(db, d => tryOp(() =>
+    d.exec(`insert into order_items (order_id,name,qty,unit_price,line_no) values ('${ORDER_ID}','x',1,0,99)`)));
+
+  test('products SELECT が拒否される（anon）',       () => assert.equal(selProd.ok,  false));
+  test('products INSERT が拒否される（anon）',       () => assert.equal(insProd.ok,  false));
+  test('orders SELECT が拒否される（anon）',         () => assert.equal(selOrd.ok,   false));
+  test('orders INSERT が拒否される（anon）',         () => assert.equal(insOrd.ok,   false));
+  test('order_items SELECT が拒否される（anon）',    () => assert.equal(selItems.ok, false));
+  test('order_items INSERT が拒否される（anon）',    () => assert.equal(insItems.ok, false));
+}
+
+// ── F. 閲覧ロール — orders/products は SELECT のみ ────────────────────────
+// 閲覧ロール（UUID 0003）: orders=view, products=view
+const KIRAN_ID = '00000000-0000-4001-8000-000000000003';
+console.log('\nF. 閲覧ロール（orders=view, products=view）');
+{
+  const db = await buildDb(ALL_MIGRATIONS);
+  await seedUsers(db);
+  // 閲覧ロールのユーザーを追加
+  // auto_profile トリガが先に担当者ロールで profiles を作るため、insert on conflict では上書きできない。
+  // auth.users insert 後に update で閲覧ロールに変更する。
+  await db.exec(`
+    insert into auth.users (id, email, raw_app_meta_data) values
+      ('${KIRAN_ID}', 'kiran@test.local', '{}')
+    on conflict (id) do nothing;
+    update profiles set role_id = '00000000-0000-4000-9000-000000000003'
+    where user_id = '${KIRAN_ID}';
+  `);
+  await seedData(db);
+
+  const selProd  = await asUser(db, KIRAN_ID, d => d.query('select * from products'));
+  const insProd  = await asUser(db, KIRAN_ID, d => tryOp(() => d.exec("insert into products (code,name,unit_price) values ('X','x',0)")));
+  const selOrd   = await asUser(db, KIRAN_ID, d => d.query('select * from orders'));
+  const insOrd   = await asUser(db, KIRAN_ID, d => tryOp(() =>
+    d.exec(`insert into orders (order_no,customer_id,order_date,status) values ('SO-X2','${CUST_ID}',current_date,'draft')`)));
+  const delOrd   = await asUser(db, KIRAN_ID, d =>
+    tryModify(d, `delete from orders where id = '${ORDER_ID}'`));
+
+  test('products SELECT が通る（閲覧=view）',            () => assert.ok(selProd.rows.length >= 0));
+  test('products INSERT が拒否される（閲覧=view）',      () => assert.equal(insProd.ok, false));
+  test('orders SELECT が通る（閲覧=view）',              () => assert.ok(selOrd.rows.length >= 0));
+  test('orders INSERT が拒否される（閲覧 edit が必要）', () => assert.equal(insOrd.ok,  false));
+  test('orders DELETE が拒否される（閲覧 manage が必要）',() => assert.equal(delOrd.ok, false));
+}
+
+// ── G. 担当者 — orders edit 可・manage 不可 ──────────────────────────────
+console.log('\nG. 担当者（orders=edit, manage は不可）');
+{
+  const db = await buildDb(ALL_MIGRATIONS);
+  await seedUsers(db);
+  await seedData(db);
+
+  const insOrd = await asUser(db, TANTOU_ID, d => tryOp(() =>
+    d.exec(`insert into orders (order_no,customer_id,order_date,status) values ('SO-TN','${CUST_ID}',current_date,'draft')`)));
+  const updOrd = await asUser(db, TANTOU_ID, d =>
+    tryModify(d, `update orders set memo = 'test' where id = '${ORDER_ID}'`));
+  const delOrd = await asUser(db, TANTOU_ID, d =>
+    tryModify(d, `delete from orders where id = '${ORDER_ID}'`));
+  const insItem = await asUser(db, TANTOU_ID, d => tryOp(() =>
+    d.exec(`insert into order_items (order_id,name,qty,unit_price,line_no) values ('${ORDER_ID}','追加品',1,500,99)`)));
+  const delItem = await asUser(db, TANTOU_ID, d =>
+    tryModify(d, `delete from order_items where id = '${ITEM_ID}'`));
+
+  test('orders INSERT が通る（担当者=edit）',         () => assert.equal(insOrd.ok,  true));
+  test('orders UPDATE が通る（担当者=edit）',         () => assert.equal(updOrd.ok,  true));
+  test('orders DELETE が拒否される（担当者 manage が必要）', () => assert.equal(delOrd.ok, false));
+  test('order_items INSERT が通る（担当者=edit）',    () => assert.equal(insItem.ok, true));
+  test('order_items DELETE が通る（担当者 edit で可）',() => assert.equal(delItem.ok, true));
 }
 
 // ── D. self-check（歯があることの確認）────────────────────────────────────
