@@ -8,39 +8,33 @@ import { NavProgress } from "@/components/NavProgress";
 import { IconSidebarExpand, IconLogout } from "@/components/icons";
 import { logout } from "@/app/login/actions";
 import { APP_NAME } from "@/lib/app-info";
+import type { Perms } from "@/lib/can";
 
 const STORAGE_KEY = "app.sidebar.collapsed";
 
-// サイドバー＋ページ本体＋スマホ（上部バー／下部タブ）のアプリシェル。
 export function AppShell({
   email,
-  role,
+  perms,
+  permsFailed,
   children,
 }: {
   email?: string | null;
-  role?: string | null;
+  perms?: Perms;
+  permsFailed?: boolean;
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     try {
-      if (window.localStorage.getItem(STORAGE_KEY) === "1") {
-        setCollapsed(true);
-      }
-    } catch {
-      // localStorage 使えない環境は無視
-    }
+      if (window.localStorage.getItem(STORAGE_KEY) === "1") setCollapsed(true);
+    } catch { /* ignore */ }
   }, []);
 
   const toggle = () => {
     setCollapsed((prev) => {
       const next = !prev;
-      try {
-        window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
-      } catch {
-        // ignore
-      }
+      try { window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0"); } catch { /* ignore */ }
       return next;
     });
   };
@@ -48,7 +42,7 @@ export function AppShell({
   return (
     <div className="flex min-h-screen bg-surface">
       <Suspense fallback={null}><NavProgress /></Suspense>
-      {!collapsed && <Sidebar email={email} role={role} onCollapse={toggle} />}
+      {!collapsed && <Sidebar email={email} onCollapse={toggle} perms={perms} />}
       <div className="relative flex-1 min-w-0">
         {collapsed && (
           <button
@@ -77,10 +71,17 @@ export function AppShell({
         </div>
 
         <div className="pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0">
+          {permsFailed && (
+            <div className="px-4 pt-4 md:px-8 md:pt-6">
+              <div className="notice bad">
+                <p>権限情報を確認できませんでした。再読み込みするか担当者にご連絡ください。</p>
+              </div>
+            </div>
+          )}
           {children}
         </div>
       </div>
-      <MobileTabBar role={role} />
+      <MobileTabBar perms={perms} />
     </div>
   );
 }

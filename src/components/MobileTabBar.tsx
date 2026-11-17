@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { tabsFor, menuMatchLength } from "@/lib/menu";
+import { TAB_MENU, menuMatchLength } from "@/lib/menu";
 import { cn } from "@/lib/cn";
+import { can, type Perms } from "@/lib/can";
 
-export function MobileTabBar({ role }: { role?: string | null }) {
+export function MobileTabBar({ perms }: { perms?: Perms }) {
   const pathname = usePathname();
-  const TAB_MENU = tabsFor(role);
+  const menu = TAB_MENU.filter((m) => !m.feature || can(perms ?? {}, m.feature, m.minLevel ?? "view"));
 
   return (
     <nav
@@ -19,8 +20,8 @@ export function MobileTabBar({ role }: { role?: string | null }) {
       )}
     >
       <ul className="flex">
-        {TAB_MENU.map(({ key, label, href, icon: Icon, also }) => {
-          const best = Math.max(...TAB_MENU.map((m) => menuMatchLength(m, pathname)));
+        {menu.map(({ key, label, href, icon: Icon, also }) => {
+          const best = Math.max(...menu.map((m) => menuMatchLength(m, pathname)));
           const active = best > 0 && menuMatchLength({ key, label, href, icon: Icon, also }, pathname) === best;
           return (
             <li key={key} className="flex-1">

@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { getTrustedIP, ipAllowed, parseAccessIPs } from "@/lib/ipGate";
 
-// 関所は2段。
+// 関所は2段（IP 制御を設定すると3段目が先に入る）。
+// ０ IP ゲート：ACCESS_IPS を設定した場合のみ有効。soft は許可 IP を素通り、strict は非許可 IP を拒否。
 // ① 入口：アクセスコード（このファイル）。玄関を隠し、第三者を画面に近づけない。本人確認ではない。
 // ② 内側：Supabase のログイン（lib/supabase/middleware.ts）。管理者が作ったアカウントだけが入れる。
 // データの分離は RLS が DB で強制する（supabase/migrations/0002_auth_rls.sql）。
@@ -10,6 +12,8 @@ import { updateSession } from "@/lib/supabase/middleware";
 //   ACCESS_KEYS          32桁のアクセスコード。カンマ区切りで複数可（「ラベル:コード」の形も可）。32桁でないものは無視。1本消せばそのコードだけ即失効。
 //   ACCESS_COOKIE_SECRET Cookie 署名用の長いランダム値（例：openssl rand -hex 32）。未設定なら誰も通れない。
 //   ACCESS_ENABLED       "true" のときだけ①の入口ゲートを有効にする（既定＝無効）。司令塔のセキュリティ設定でONにすると、司令塔が ACCESS_ENABLED=true とアクセスコード(ACCESS_KEYS)をVercelに設定する。
+//   ACCESS_IPS           許可する IP / CIDR のカンマ区切り（例：203.0.113.0/24,198.51.100.1）。空なら IP 制御なし。
+//   ACCESS_MODE          "soft"（既定）または "strict"。soft = 許可 IP は素通り。strict = 非許可 IP は拒否。
 
 const KEY_LEN = 32;
 const COOKIE = "sf_ea";
@@ -89,9 +93,10 @@ label{display:block;font-size:10px;letter-spacing:.14em;color:#8a8a86;margin-bot
 input[type=password]{display:block;width:100%;border:1px solid #e2e1db;border-radius:4px;padding:7px 12px;font-size:14px;color:#454545;outline:none;background:#fff;font-variant-numeric:tabular-nums}
 input[type=password]:focus{border-color:#9a1a3c;box-shadow:0 0 0 3px rgba(154,26,60,.12)}
 .e{font-size:12px;color:#9a1a3c;margin-top:8px}
-button{margin-top:14px;width:100%;background:#9a1a3c;color:#fff;border:none;border-radius:4px;padding:9px 12px;font-size:13px;letter-spacing:.06em;cursor:pointer}
+button{margin-top:16px;width:100%;background:#9a1a3c;color:#fff;border:none;border-radius:6px;padding:10px 12px;font-size:14px;font-weight:600;letter-spacing:.04em;cursor:pointer;font-family:inherit}
 button:hover{background:#7a142f}
 </style></head><body>
+<div class="card">
 <form method="POST" action="/__access">
 <input type="hidden" name="next" value="${esc(next)}">
 <h1>アクセスコード</h1>
@@ -100,29 +105,47 @@ button:hover{background:#7a142f}
 <input type="password" id="k" name="key" maxlength="64" autocomplete="off" autofocus required>
 ${failed ? '<p class="e">コードが正しくありません。</p>' : ""}
 <button type="submit">次へ</button>
-</form></body></html>`;
+</form>
+</div></body></html>`;
   return new Response(html, { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // 機械向けの公開口は IP ゲートもコードゲートも通さない
   if (OPEN_PATHS.has(pathname) || OPEN_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
   if (SELF_VERIFIED_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
   const enabled = process.env.ACCESS_ENABLED === "true";
   const secret = process.env.ACCESS_COOKIE_SECRET ?? "";
 
-  // アクセスコードの入力画面と受け口
+  // ０ IP ゲート（ACCESS_IPS が設定されており enabled のときだけ有効）
+  const ipList = parseAccessIPs(process.env.ACCESS_IPS);
+  let ipPassthrough = false;
+  if (ipList.length > 0 && enabled) {
+    const mode = process.env.ACCESS_MODE === "strict" ? "strict" : "soft";
+    const clientIP = getTrustedIP(request);
+    const ipOk = clientIP != null && ipAllowed(clientIP, ipList);
+    if (!ipOk && mode === "strict") return new Response(null, { status: 403 });
+    if (ipOk) ipPassthrough = true; // soft + 許可 IP：コードゲートを省く
+  }
+
+  // アクセスコードの入力画面と受け口（IP 素通りのときは / へリダイレクト）
   if (pathname === "/__access") {
-    if (!enabled) return NextResponse.redirect(new URL("/", request.url));
+    if (!enabled || ipPassthrough) return NextResponse.redirect(new URL("/", request.url));
     if (request.method === "GET") return accessPage(safeNext(request.nextUrl.searchParams.get("next")), false);
     if (request.method !== "POST") return new Response(null, { status: 405 });
     const form = new URLSearchParams(await request.text());
     const next = safeNext(form.get("next"));
     const input = (form.get("key") ?? "").trim();
-    const value = secret && input.length === KEY_LEN ? await hmac(input, secret) : "";
-    if (!value || !(await matches(value, secret))) {
+    let gateOk = false;
+    let value = "";
+    try {
+      value = secret && input.length === KEY_LEN ? await hmac(input, secret) : "";
+      if (value) gateOk = await matches(value, secret);
+    } catch { gateOk = false; }
+    if (!gateOk) {
       await new Promise((r) => setTimeout(r, 1000)); // 総当たりを遅くする
       return accessPage(next, true, 403);
     }
@@ -131,9 +154,16 @@ export async function middleware(request: NextRequest) {
     return res;
   }
 
-  // ① 入口：署名つき Cookie があるか
+  // ① 入口：署名つき Cookie があるか（IP 素通りなら省く）
   const cookieVal = request.cookies.get(COOKIE)?.value ?? "";
-  const passed = !enabled || (!!secret && !!cookieVal && (await matches(cookieVal, secret)));
+  let passed: boolean;
+  if (!enabled || ipPassthrough) {
+    passed = true;
+  } else if (!secret || !cookieVal) {
+    passed = false; // secret 未設定または Cookie なし → 安全に弾く（クラッシュしない）
+  } else {
+    try { passed = await matches(cookieVal, secret); } catch { passed = false; }
+  }
   if (!passed) {
     const accept = request.headers.get("accept") ?? "";
     if (request.method === "GET" && accept.includes("text/html")) {
@@ -147,7 +177,8 @@ export async function middleware(request: NextRequest) {
 
   // ② 内側：ログイン。ログイン画面は確認を通さずそのまま開く。
   const res = LOGIN_PATHS.has(pathname) ? NextResponse.next() : await updateSession(request);
-  if (enabled) res.cookies.set(COOKIE, cookieVal, cookieOptions); // スライディング延長（通過のたびに貼り直す）
+  // IP 素通りのときは Cookie を貼らない（コードゲートを経由していない）
+  if (enabled && !ipPassthrough) res.cookies.set(COOKIE, cookieVal, cookieOptions);
   return res;
 }
 

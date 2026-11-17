@@ -6,6 +6,8 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { createClient } from "@/lib/supabase/server";
 import { caseStatusLabel } from "@/lib/labels";
 import { APP_NAME } from "@/lib/app-info";
+import type { FormState } from "@/lib/form-state";
+import type { CaseValues } from "../CaseForm";
 import { CaseForm } from "../CaseForm";
 import { updateCase } from "../actions";
 
@@ -21,7 +23,7 @@ export default async function EditCasePage({ params, searchParams }: { params: P
   if (!UUID.test(id)) notFound();
   const sb = await createClient();
   const [{ data: c }, { data: customers }] = await Promise.all([
-    sb.from("cases").select("id, case_no, title, customer_id, status, amount, due_date, memo").eq("id", id).maybeSingle(),
+    sb.from("cases").select("id, case_no, title, customer_id, status, amount, due_date, memo, updated_at").eq("id", id).maybeSingle(),
     sb.from("customers").select("id, name, contact").order("name"),
   ]);
   if (!c) notFound();
@@ -37,7 +39,7 @@ export default async function EditCasePage({ params, searchParams }: { params: P
       <FlashMessage error={sp.error} />
       <CaseForm
         id={c.id}
-        action={updateCase.bind(null, c.id)}
+        action={(prev: FormState<CaseValues>, formData: FormData) => updateCase(c.id, prev, formData)}
         customers={customers ?? []}
         initial={{
           title: c.title,
@@ -47,6 +49,7 @@ export default async function EditCasePage({ params, searchParams }: { params: P
           due_date: c.due_date ?? "",
           memo: c.memo ?? "",
         }}
+        expectedUpdatedAt={c.updated_at}
       />
     </main>
   );

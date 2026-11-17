@@ -14,8 +14,14 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
 
 ## 設計の前提（係はここを読む）
 
+**業務システムの見本と生成物はこの契約を満たすこと。** 画面と生成物の判断基準は [`docs/screen-contract.md`](docs/screen-contract.md)（画面の契約 DoD v1）に置く。
+
 - **デザインシステムと部品は雛形に焼き込み済み**。色・角丸・フォントは `src/app/globals.css` のトークン経由（直値の色は書かない）。
 - **係は、この上に「業務の流れ」を足すだけ**。画面は見本の「案件」と同じ作り（PageHeader → 検索カード → 一覧 → 登録・編集フォーム）で足し、ナビは `src/lib/menu.ts` に業務の流れ順で並べる。見出しは機能名そのまま。
+- **マスタ・明細は既定でリスト（表）。カードは要約／ダッシュボード／少数強調にのみ使う**。
+  - 「一覧で見て比べて編集する」データ（顧客マスタ・商品マスタ・案件明細など）は、`master-table` クラスを付けた `<table>` で出す（`globals.css` に定義済み、スマホは `data-label` 折り返し）。
+  - `DataCard` を使うのは：スマホ幅の案件一覧（PC はテーブル・スマホはカードの二重描画パターン）、ダッシュボードのサマリタイル、件数が3件以下の強調表示、など「比較でなく目に留まらせる」場面に限る。
+  - 新しいマスタ画面を追加するときは `master/page.tsx` の顧客テーブルを雛形にする（SubNav + 検索 + `master-table` テーブル）。
 - **業種ロジックは足さない**。会計・在庫・モール連携などの業種固有の lib はこのテンプレに入れない（案件ごとのリポジトリで作る）。
 - ボタンは `components/ui` の `Button` / `LinkButton` / `SubmitButton`、確認は `ConfirmModal`、通知は `FlashMessage`。`window.confirm` / `alert` は使わない。
 - ステータスのラベルと色は `src/lib/labels.ts` に集約。日時は `src/lib/format.ts`（Asia/Tokyo）。
@@ -26,7 +32,7 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
 - `src/app/(app)/` … アプリシェル（`AppShell.tsx`：サイドバー＋ページ本体＋スマホの上部バー／下部タブ）、`loading.tsx`、`error.tsx`。
   - `page.tsx` … 見本画面「案件一覧」（検索カード・保存条件・見出しクリックの並べ替え・サーバーのページ送り・StatusBadge。スマホはカード表示）。
   - `cases/new`・`cases/[id]` … 登録・編集（Field 類・顧客の検索モーダル・SubmitButton・ConfirmModal・FlashMessage）。`cases/actions.ts` が Server Action。
-  - `master/` … マスタの見本（SubNav ＋ DataCard）。
+  - `master/` … マスタの見本（SubNav ＋ 検索 ＋ `master-table` テーブル。スマホは `data-label` 折り返し）。
 - `src/components/` … `Sidebar` / `MobileTabBar` / `NavProgress` / `icons` と、`ui/`（Button, PageHeader, SubNav, StatusBadge, DataCard, Pagination, SearchModal, SearchTemplates, ConfirmModal, FlashMessage, Field, DateField, MonthField, SubmitButton, Skeleton, Tip）、`print/`（PrintSheet・BackButton：ブラウザ印刷の共通基盤。帳票を作るときに使う）。
 - `.github/workflows/ops-heartbeat.yml` … このシステムは Den に心拍（15分ごと）を送る。トークン（`DEN_URL` / `OPS_TOKEN` / `APP_HEALTH_URL`）は本稼働時に司令塔が自動で入れる。未設定のあいだは何もせず正常終了する。
 - `src/middleware.ts` … 入口の合言葉＋ログイン確認の2段。`src/app/login/`（ログイン）、`src/app/(app)/account/`（パスワード変更）。
@@ -78,7 +84,7 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
 - **最初の管理者**：新規作成時に、サーバー側（service_role）で最初の1人を `profiles` に入れる（`insert into profiles (user_id, role) values ('<auth.users の id>', 'admin')`）。この1人がいないと、役割の画面は誰も開けない。仮パスワードなどの秘密は DB・ログに残さない。
 - 0003 が未適用でも、既存の画面は動く（`currentRole()` は「役割なし」を返す）。
 
-テスト：`pnpm test`（役割の判定・メニューの出し分け・実際の Postgres での RLS・既存の守りが変わっていないこと）。
+テスト：`pnpm test`（境界チェック・権限判定・IP ゲート・ミドルウェア・RSC 境界・フォーム契約・マスタ CRUD の全テストをまとめて実行）。新しいテストスクリプトを追加したときは `package.json` の `"test"` にも必ず追記すること。
 
 ## 開発
 
