@@ -4,14 +4,14 @@ import { getTrustedIP, ipAllowed, parseAccessIPs } from "@/lib/ipGate";
 
 // 関所は2段（IP 制御を設定すると3段目が先に入る）。
 // ０ IP ゲート：ACCESS_IPS を設定した場合のみ有効。soft は許可 IP を素通り、strict は非許可 IP を拒否。
-// ① 入口：32桁の合言葉（このファイル）。玄関を隠し、第三者を画面に近づけない。本人確認ではない。
+// ① 入口：アクセスコード（このファイル）。玄関を隠し、第三者を画面に近づけない。本人確認ではない。
 // ② 内側：Supabase のログイン（lib/supabase/middleware.ts）。管理者が作ったアカウントだけが入れる。
 // データの分離は RLS が DB で強制する（supabase/migrations/0002_auth_rls.sql）。
 //
 // 環境変数（すべてサーバー専用。NEXT_PUBLIC_ を付けない）
-//   ACCESS_KEYS          32桁の合言葉。カンマ区切りで複数可（「ラベル:合言葉」の形も可）。32桁でないものは無視。1本消せばその合言葉だけ即失効。
+//   ACCESS_KEYS          32桁のアクセスコード。カンマ区切りで複数可（「ラベル:コード」の形も可）。32桁でないものは無視。1本消せばそのコードだけ即失効。
 //   ACCESS_COOKIE_SECRET Cookie 署名用の長いランダム値（例：openssl rand -hex 32）。未設定なら誰も通れない。
-//   ACCESS_ENABLED       "false" のときだけ①を外す（ローカル開発用。本番では設定しない）。
+//   ACCESS_ENABLED       "true" のときだけ①の入口ゲートを有効にする（既定＝無効）。司令塔のセキュリティ設定でONにすると、司令塔が ACCESS_ENABLED=true とアクセスコード(ACCESS_KEYS)をVercelに設定する。
 //   ACCESS_IPS           許可する IP / CIDR のカンマ区切り（例：203.0.113.0/24,198.51.100.1）。空なら IP 制御なし。
 //   ACCESS_MODE          "soft"（既定）または "strict"。soft = 許可 IP は素通り。strict = 非許可 IP は拒否。
 
@@ -29,13 +29,13 @@ const cookieOptions = {
 // 機械向けの口は両方の関所を通さない。完全一致で判定する。
 //   /api/health … { ok } だけ返す監視口。業務データは返さないので公開して安全。
 //   /manifest.webmanifest・/sw.js・/icons/* … ホーム画面に追加するための静的ファイル。ブラウザはマニフェストを Cookie なしで取りに来るため、
-//     ここを通さないと入口の合言葉で弾かれてインストールできない。業務データは含まない。
+//     ここを通さないと入口のアクセスコードで弾かれてインストールできない。業務データは含まない。
 const OPEN_PATHS = new Set(["/api/health", "/manifest.webmanifest", "/sw.js"]);
 const OPEN_PREFIXES = ["/icons/"];
-// 自前の鍵で検証する前提の機械向けの口（Webhook・Cron）。入口の合言葉は求めない。
+// 自前の鍵で検証する前提の機械向けの口（Webhook・Cron）。入口のアクセスコードは求めない。
 // ここに置いた口は、必ず口の中で署名や CRON_SECRET を確かめること（確かめないと誰でも叩ける）。
 const SELF_VERIFIED_PREFIXES = ["/api/webhooks/", "/api/cron/"];
-// ログイン前に開く画面。入口の合言葉は通すが、ログイン確認（updateSession）は通さない
+// ログイン前に開く画面。入口のアクセスコードは通すが、ログイン確認（updateSession）は通さない
 // （通すと未ログイン→/login へ 307 で結局弾かれる）。完全一致で判定する。
 const LOGIN_PATHS = new Set(["/login"]);
 
@@ -62,7 +62,7 @@ function sameString(a: string, b: string): boolean {
   return d === 0;
 }
 
-// 署名済みの値が、いま有効な合言葉のどれかのものか（定数時間・早期 return しない）。
+// 署名済みの値が、いま有効なアクセスコードのどれかのものか（定数時間・早期 return しない）。
 async function matches(signed: string, secret: string): Promise<boolean> {
   let ok = false;
   for (const k of validKeys()) if (sameString(signed, await hmac(k, secret))) ok = true;
@@ -82,15 +82,15 @@ function esc(s: string) {
 
 function accessPage(next: string, failed: boolean, status = 200): Response {
   const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="data:,"><title>合言葉の入力</title>
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="data:,"><title>アクセスコード</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif;background:#edece7;color:#454545;display:flex;min-height:100svh;align-items:center;justify-content:center;padding:16px}
-.card{background:#fff;border:1px solid #e2e1db;border-radius:10px;padding:36px 32px;width:100%;max-width:360px}
-h1{font-size:16px;font-weight:600;color:#1a1a1a;margin-bottom:8px;line-height:1.5}
-.sub{font-size:12px;color:#8a8a86;line-height:1.7;margin-bottom:24px}
-label{display:block;font-size:12px;font-weight:600;color:#454545;margin-bottom:6px}
-input[type=password]{display:block;width:100%;border:1px solid #e2e1db;border-radius:6px;padding:9px 12px;font-size:14px;color:#454545;outline:none;background:#fff;font-variant-numeric:tabular-nums}
+form{background:#fff;border:1px solid #e2e1db;border-radius:6px;padding:32px;width:100%;max-width:340px}
+h1{font-size:12px;font-weight:600;letter-spacing:.14em;color:#8a8a86;margin-bottom:8px}
+.n{font-size:11px;color:#8a8a86;margin-bottom:16px;line-height:1.6}
+label{display:block;font-size:10px;letter-spacing:.14em;color:#8a8a86;margin-bottom:4px}
+input[type=password]{display:block;width:100%;border:1px solid #e2e1db;border-radius:4px;padding:7px 12px;font-size:14px;color:#454545;outline:none;background:#fff;font-variant-numeric:tabular-nums}
 input[type=password]:focus{border-color:#9a1a3c;box-shadow:0 0 0 3px rgba(154,26,60,.12)}
 .e{font-size:12px;color:#9a1a3c;margin-top:8px}
 button{margin-top:16px;width:100%;background:#9a1a3c;color:#fff;border:none;border-radius:6px;padding:10px 12px;font-size:14px;font-weight:600;letter-spacing:.04em;cursor:pointer;font-family:inherit}
@@ -99,11 +99,11 @@ button:hover{background:#7a142f}
 <div class="card">
 <form method="POST" action="/__access">
 <input type="hidden" name="next" value="${esc(next)}">
-<h1>このページを開くには合言葉が必要です</h1>
-<p class="sub">担当者からお伝えした合言葉を入力してください。分からないときは、ご案内した担当者にご確認ください。</p>
-<label for="k">合言葉</label>
+<h1>アクセスコード</h1>
+<p class="n">招待された方だけが入れます。お手元のコードを入力してください。</p>
+<label for="k">コード</label>
 <input type="password" id="k" name="key" maxlength="64" autocomplete="off" autofocus required>
-${failed ? '<p class="e">合言葉が違うようです。もう一度ご確認ください。</p>' : ""}
+${failed ? '<p class="e">コードが正しくありません。</p>' : ""}
 <button type="submit">次へ</button>
 </form>
 </div></body></html>`;
@@ -117,7 +117,7 @@ export async function middleware(request: NextRequest) {
   if (OPEN_PATHS.has(pathname) || OPEN_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
   if (SELF_VERIFIED_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
-  const enabled = process.env.ACCESS_ENABLED !== "false";
+  const enabled = process.env.ACCESS_ENABLED === "true";
   const secret = process.env.ACCESS_COOKIE_SECRET ?? "";
 
   // ０ IP ゲート（ACCESS_IPS が設定されており enabled のときだけ有効）
@@ -131,7 +131,7 @@ export async function middleware(request: NextRequest) {
     if (ipOk) ipPassthrough = true; // soft + 許可 IP：コードゲートを省く
   }
 
-  // 合言葉の入力画面と受け口（IP 素通りのときは / へリダイレクト）
+  // アクセスコードの入力画面と受け口（IP 素通りのときは / へリダイレクト）
   if (pathname === "/__access") {
     if (!enabled || ipPassthrough) return NextResponse.redirect(new URL("/", request.url));
     if (request.method === "GET") return accessPage(safeNext(request.nextUrl.searchParams.get("next")), false);
