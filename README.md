@@ -84,7 +84,7 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
 - **最初の管理者**：新規作成時に、サーバー側（service_role）で最初の1人を `profiles` に入れる（`insert into profiles (user_id, role) values ('<auth.users の id>', 'admin')`）。この1人がいないと、役割の画面は誰も開けない。仮パスワードなどの秘密は DB・ログに残さない。
 - 0003 が未適用でも、既存の画面は動く（`currentRole()` は「役割なし」を返す）。
 
-テスト：`pnpm test`（役割の判定・メニューの出し分け・実際の Postgres での RLS・既存の守りが変わっていないこと）。
+テスト：`pnpm test`（境界チェック・権限判定・IP ゲート・ミドルウェア・RSC 境界・フォーム契約・マスタ CRUD の全テストをまとめて実行）。新しいテストスクリプトを追加したときは `package.json` の `"test"` にも必ず追記すること。
 
 ## 開発
 
