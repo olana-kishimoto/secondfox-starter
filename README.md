@@ -3,7 +3,7 @@
 SecondFox がお客様のシステムを新規作成するときの「元」になるテンプレートです（GitHub の Template repository に設定）。
 作った瞬間から、Quarc / kobeya 水準の見た目と部品が揃っています。
 
-スタック = Next 16 / React 19 / Tailwind v4 / @fontsource/noto-sans-jp / Supabase（@supabase/ssr）/ Vercel / pnpm。
+スタック = Next 16 / React 19 / Tailwind v4 / @fontsource/noto-sans-jp / Supabase（@supabase/ssr）/ Vercel / npm。
 
 ## SecondFox がこのテンプレをどう使うか
 
@@ -85,13 +85,13 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
 - **最初の管理者**：新規作成時に、サーバー側（service_role）で最初の1人を `profiles` に入れる（`insert into profiles (user_id, role) values ('<auth.users の id>', 'admin')`）。この1人がいないと、役割の画面は誰も開けない。仮パスワードなどの秘密は DB・ログに残さない。
 - 0003 が未適用でも、既存の画面は動く（`currentRole()` は「役割なし」を返す）。
 
-テスト：`pnpm test`（境界チェック・権限判定・IP ゲート・ミドルウェア・RSC 境界・フォーム契約・マスタ CRUD の全テストをまとめて実行）。新しいテストスクリプトを追加したときは `package.json` の `"test"` にも必ず追記すること。
-RLS 否定テスト（`pnpm test:rls`）は pglite ベースの独立ジョブ（Docker 不要）。CI は `.github/workflows/rls.yml` が担当する。
+テスト：`npm test`（境界チェック・権限判定・IP ゲート・ミドルウェア・RSC 境界・フォーム契約・マスタ CRUD の全テストをまとめて実行）。新しいテストスクリプトを追加したときは `package.json` の `"test"` にも必ず追記すること。
+RLS 否定テスト（`npm run test:rls`）は pglite ベースの独立ジョブ（Docker 不要）。CI は `.github/workflows/rls.yml` が担当する。
 
 ## 開発
 
 ```
-pnpm install
-pnpm dev          # .env.local に Supabase の値と ACCESS_*。入口は既定で無効（有効にするときだけ ACCESS_ENABLED=true と ACCESS_KEYS）
-pnpm typecheck && pnpm build
+npm install
+npm run dev       # .env.local に Supabase の値と ACCESS_*。入口は既定で無効（有効にするときだけ ACCESS_ENABLED=true と ACCESS_KEYS）
+npm run typecheck && npm run build
 ```
