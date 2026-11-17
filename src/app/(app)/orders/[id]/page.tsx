@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FlashMessage } from "@/components/ui/FlashMessage";
@@ -63,7 +64,17 @@ export default async function OrderDetailPage({
       <PageHeader
         eyebrow={`Orders / ${order.order_no}`}
         title="受注詳細"
-        right={<StatusBadge label={st.label} color={st.color} />}
+        right={
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/orders/${order.id}/invoice`}
+              className="inline-flex h-8 items-center rounded border border-line px-3 text-[12px] text-text hover:border-accent hover:text-accent"
+            >
+              請求書
+            </Link>
+            <StatusBadge label={st.label} color={st.color} />
+          </div>
+        }
       />
       <FlashMessage error={sp.error} />
       <OrderForm
