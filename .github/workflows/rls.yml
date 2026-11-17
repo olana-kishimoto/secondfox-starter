@@ -1,0 +1,35 @@
+name: rls
+
+# RLS 否定テスト（screen-contract.md C-1）。
+# Docker 不要の pglite ベースで全マイグレーションを適用し、
+# anon / 担当者 / 管理者の操作可否を機械で検証する。
+# npm test（Node スクリプト集約）とは独立したジョブ。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/test-rls.mjs'
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/test-rls.mjs'
+  workflow_dispatch: {}
+
+jobs:
+  rls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run RLS negative tests
+        run: npm run test:rls

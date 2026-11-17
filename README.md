@@ -86,6 +86,7 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
 - 0003 が未適用でも、既存の画面は動く（`currentRole()` は「役割なし」を返す）。
 
 テスト：`pnpm test`（境界チェック・権限判定・IP ゲート・ミドルウェア・RSC 境界・フォーム契約・マスタ CRUD の全テストをまとめて実行）。新しいテストスクリプトを追加したときは `package.json` の `"test"` にも必ず追記すること。
+RLS 否定テスト（`pnpm test:rls`）は pglite ベースの独立ジョブ（Docker 不要）。CI は `.github/workflows/rls.yml` が担当する。
 
 ## 開発
 
