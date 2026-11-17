@@ -12,6 +12,7 @@
     "test:middleware-gate": "node --no-warnings scripts/test-middleware-gate.mjs",
     "test:noserverfnprops": "node --no-warnings scripts/test-noserverfnprops.mjs",
     "test:caseform-state": "node --no-warnings scripts/test-caseform-state.mjs",
+    "test:master-crud": "node --no-warnings scripts/test-master-crud.mjs",
     "seed:demo": "psql \"$DATABASE_URL\" -f supabase/seed/demo.sql"
   },
   "dependencies": {
