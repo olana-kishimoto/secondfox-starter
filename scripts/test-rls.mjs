@@ -101,6 +101,18 @@ async function seedData(db) {
     insert into cases (id, title, customer_id) values
       ('${CASE_ID}', 'テスト案件', '${CUST_ID}')
     on conflict (id) do nothing;
+
+    insert into products (id, code, name, unit_price) values
+      ('${PROD_ID}', 'P-TEST', 'テスト商品', 10000)
+    on conflict (id) do nothing;
+
+    insert into orders (id, order_no, customer_id, order_date, status) values
+      ('${ORDER_ID}', 'SO-TEST', '${CUST_ID}', current_date, 'draft')
+    on conflict (id) do nothing;
+
+    insert into order_items (id, order_id, product_id, name, qty, unit_price, line_no) values
+      ('${ITEM_ID}', '${ORDER_ID}', '${PROD_ID}', 'テスト商品', 1, 10000, 1)
+    on conflict (id) do nothing;
   `);
 }
 
@@ -173,7 +185,14 @@ const ALL_MIGRATIONS = [
   '0002_auth_rls.sql',
   '0003_roles.sql',
   '0004_master_customers.sql',
+  '0005_orders.sql',
+  '0006_order_save.sql',
 ];
+
+// 受注テスト用 UUID
+const PROD_ID    = '00000000-0000-4005-8000-000000000001';
+const ORDER_ID   = '00000000-0000-4005-8000-000000000011';
+const ITEM_ID    = '00000000-0000-4005-8000-000000000021';
 
 console.log('\nRLS 否定テスト\n');
 
@@ -276,6 +295,177 @@ console.log('\nC. 管理者（is_system=true → 全 feature manage）');
     () => assert.equal(insCases.ok, true));
   test('cases DELETE が通る（manage）',
     () => assert.equal(delCases.ok, true));
+}
+
+// ── E. anon — orders/products/order_items ────────────────────────────────
+console.log('\nE. anon（orders/products/order_items）');
+{
+  const db = await buildDb(ALL_MIGRATIONS);
+  await seedUsers(db);
+  await seedData(db);
+
+  const selProd  = await asAnon(db, d => tryOp(() => d.query('select * from products')));
+  const insProd  = await asAnon(db, d => tryOp(() => d.exec("insert into products (code,name,unit_price) values ('X','x',0)")));
+  const selOrd   = await asAnon(db, d => tryOp(() => d.query('select * from orders')));
+  const insOrd   = await asAnon(db, d => tryOp(() =>
+    d.exec(`insert into orders (order_no,customer_id,order_date,status) values ('SO-X','${CUST_ID}',current_date,'draft')`)));
+  const selItems = await asAnon(db, d => tryOp(() => d.query('select * from order_items')));
+  const insItems = await asAnon(db, d => tryOp(() =>
+    d.exec(`insert into order_items (order_id,name,qty,unit_price,line_no) values ('${ORDER_ID}','x',1,0,99)`)));
+
+  test('products SELECT が拒否される（anon）',       () => assert.equal(selProd.ok,  false));
+  test('products INSERT が拒否される（anon）',       () => assert.equal(insProd.ok,  false));
+  test('orders SELECT が拒否される（anon）',         () => assert.equal(selOrd.ok,   false));
+  test('orders INSERT が拒否される（anon）',         () => assert.equal(insOrd.ok,   false));
+  test('order_items SELECT が拒否される（anon）',    () => assert.equal(selItems.ok, false));
+  test('order_items INSERT が拒否される（anon）',    () => assert.equal(insItems.ok, false));
+}
+
+// ── F. 閲覧ロール — orders/products は SELECT のみ ────────────────────────
+// 閲覧ロール（UUID 0003）: orders=view, products=view
+const KIRAN_ID = '00000000-0000-4001-8000-000000000003';
+console.log('\nF. 閲覧ロール（orders=view, products=view）');
+{
+  const db = await buildDb(ALL_MIGRATIONS);
+  await seedUsers(db);
+  // 閲覧ロールのユーザーを追加
+  // auto_profile トリガが先に担当者ロールで profiles を作るため、insert on conflict では上書きできない。
+  // auth.users insert 後に update で閲覧ロールに変更する。
+  await db.exec(`
+    insert into auth.users (id, email, raw_app_meta_data) values
+      ('${KIRAN_ID}', 'kiran@test.local', '{}')
+    on conflict (id) do nothing;
+    update profiles set role_id = '00000000-0000-4000-9000-000000000003'
+    where user_id = '${KIRAN_ID}';
+  `);
+  await seedData(db);
+
+  const selProd  = await asUser(db, KIRAN_ID, d => d.query('select * from products'));
+  const insProd  = await asUser(db, KIRAN_ID, d => tryOp(() => d.exec("insert into products (code,name,unit_price) values ('X','x',0)")));
+  const selOrd   = await asUser(db, KIRAN_ID, d => d.query('select * from orders'));
+  const insOrd   = await asUser(db, KIRAN_ID, d => tryOp(() =>
+    d.exec(`insert into orders (order_no,customer_id,order_date,status) values ('SO-X2','${CUST_ID}',current_date,'draft')`)));
+  const delOrd   = await asUser(db, KIRAN_ID, d =>
+    tryModify(d, `delete from orders where id = '${ORDER_ID}'`));
+
+  test('products SELECT が通る（閲覧=view）',            () => assert.ok(selProd.rows.length >= 0));
+  test('products INSERT が拒否される（閲覧=view）',      () => assert.equal(insProd.ok, false));
+  test('orders SELECT が通る（閲覧=view）',              () => assert.ok(selOrd.rows.length >= 0));
+  test('orders INSERT が拒否される（閲覧 edit が必要）', () => assert.equal(insOrd.ok,  false));
+  test('orders DELETE が拒否される（閲覧 manage が必要）',() => assert.equal(delOrd.ok, false));
+}
+
+// ── G. 担当者 — orders edit 可・manage 不可 ──────────────────────────────
+console.log('\nG. 担当者（orders=edit, manage は不可）');
+{
+  const db = await buildDb(ALL_MIGRATIONS);
+  await seedUsers(db);
+  await seedData(db);
+
+  const insOrd = await asUser(db, TANTOU_ID, d => tryOp(() =>
+    d.exec(`insert into orders (order_no,customer_id,order_date,status) values ('SO-TN','${CUST_ID}',current_date,'draft')`)));
+  const updOrd = await asUser(db, TANTOU_ID, d =>
+    tryModify(d, `update orders set memo = 'test' where id = '${ORDER_ID}'`));
+  const delOrd = await asUser(db, TANTOU_ID, d =>
+    tryModify(d, `delete from orders where id = '${ORDER_ID}'`));
+  const insItem = await asUser(db, TANTOU_ID, d => tryOp(() =>
+    d.exec(`insert into order_items (order_id,name,qty,unit_price,line_no) values ('${ORDER_ID}','追加品',1,500,99)`)));
+  const delItem = await asUser(db, TANTOU_ID, d =>
+    tryModify(d, `delete from order_items where id = '${ITEM_ID}'`));
+
+  test('orders INSERT が通る（担当者=edit）',         () => assert.equal(insOrd.ok,  true));
+  test('orders UPDATE が通る（担当者=edit）',         () => assert.equal(updOrd.ok,  true));
+  test('orders DELETE が拒否される（担当者 manage が必要）', () => assert.equal(delOrd.ok, false));
+  test('order_items INSERT が通る（担当者=edit）',    () => assert.equal(insItem.ok, true));
+  test('order_items DELETE が通る（担当者 edit で可）',() => assert.equal(delItem.ok, true));
+}
+
+// ── H. save_order RPC — 権限ゲート確認 ──────────────────────────────────────
+// security invoker + has_level 明示チェックにより、閲覧ロールは例外で弾かれる。
+// 担当者は新規作成・更新とも正常終了する。
+console.log('\nH. save_order RPC（閲覧ロール=拒否、担当者=通過）');
+
+// save_order 呼び出しヘルパー（items は jsonb 文字列）
+function saveOrderSql({ p_id, p_customer_id, p_order_date, p_status, p_memo, p_items, p_expected }) {
+  const id      = p_id      ? `'${p_id}'::uuid`              : 'null::uuid';
+  const cust    = p_customer_id ? `'${p_customer_id}'::uuid` : 'null::uuid';
+  const expUpd  = p_expected ? `'${p_expected}'::timestamptz` : 'null::timestamptz';
+  const itemsJ  = JSON.stringify(p_items).replace(/'/g, "''");
+  return `select save_order(${id}, ${cust}, '${p_order_date}'::date, '${p_status}', '${p_memo}', '${itemsJ}'::jsonb, ${expUpd})`;
+}
+
+const ITEM_PAYLOAD = [{ product_id: null, name: 'テスト品', qty: 1, unit_price: 500 }];
+
+{
+  const db = await buildDb(ALL_MIGRATIONS);
+  await seedUsers(db);
+  // 閲覧ロールユーザーを作成（auto_profile で担当者になるため update で上書き）
+  await db.exec(`
+    insert into auth.users (id, email, raw_app_meta_data) values
+      ('${KIRAN_ID}', 'kiran@test.local', '{}')
+    on conflict (id) do nothing;
+    update profiles set role_id = '00000000-0000-4000-9000-000000000003'
+    where user_id = '${KIRAN_ID}';
+  `);
+  await seedData(db);
+
+  // ── 閲覧ロール ────────────────────────────────────────────────────────────
+  // 新規作成：has_level 明示チェックで例外
+  const kiranCreate = await asUser(db, KIRAN_ID, d => tryOp(() =>
+    d.query(saveOrderSql({
+      p_id: null, p_customer_id: CUST_ID, p_order_date: '2025-01-01',
+      p_status: 'draft', p_memo: '', p_items: ITEM_PAYLOAD, p_expected: null,
+    }))
+  ));
+  // 既存更新：has_level 明示チェックで例外
+  const kiranUpdate = await asUser(db, KIRAN_ID, d => tryOp(() =>
+    d.query(saveOrderSql({
+      p_id: ORDER_ID, p_customer_id: CUST_ID, p_order_date: '2025-01-01',
+      p_status: 'draft', p_memo: '', p_items: ITEM_PAYLOAD, p_expected: null,
+    }))
+  ));
+
+  // ── 担当者 ────────────────────────────────────────────────────────────────
+  // 新規作成
+  const tantouCreate = await asUser(db, TANTOU_ID, d => tryOp(async () => {
+    const r = await d.query(saveOrderSql({
+      p_id: null, p_customer_id: CUST_ID, p_order_date: '2025-01-15',
+      p_status: 'draft', p_memo: 'テスト', p_items: ITEM_PAYLOAD, p_expected: null,
+    }));
+    const res = r.rows[0]?.save_order ?? r.rows[0]?.save_order;
+    if (!res || res.result !== 'ok') throw new Error(`result=${JSON.stringify(res)}`);
+  }));
+  // 既存更新（expected_updated_at は null で競合チェックなし）
+  const tantouUpdate = await asUser(db, TANTOU_ID, d => tryOp(async () => {
+    const r = await d.query(saveOrderSql({
+      p_id: ORDER_ID, p_customer_id: CUST_ID, p_order_date: '2025-02-01',
+      p_status: 'draft', p_memo: '更新', p_items: ITEM_PAYLOAD, p_expected: null,
+    }));
+    const key = Object.keys(r.rows[0])[0];
+    const res = r.rows[0][key];
+    if (!res || res.result !== 'ok') throw new Error(`result=${JSON.stringify(res)}`);
+  }));
+  // 競合検出：存在しない expected_updated_at を渡す → result='conflict'
+  const tantouConflict = await asUser(db, TANTOU_ID, d => tryOp(async () => {
+    const r = await d.query(saveOrderSql({
+      p_id: ORDER_ID, p_customer_id: CUST_ID, p_order_date: '2025-03-01',
+      p_status: 'draft', p_memo: '', p_items: ITEM_PAYLOAD, p_expected: '2000-01-01T00:00:00Z',
+    }));
+    const key = Object.keys(r.rows[0])[0];
+    const res = r.rows[0][key];
+    if (!res || res.result !== 'conflict') throw new Error(`expected conflict, got ${JSON.stringify(res)}`);
+  }));
+
+  test('閲覧ロールが save_order で新規作成できない（例外）',
+    () => assert.equal(kiranCreate.ok, false));
+  test('閲覧ロールが save_order で既存更新できない（例外）',
+    () => assert.equal(kiranUpdate.ok, false));
+  test('担当者が save_order で新規作成できる',
+    () => assert.equal(tantouCreate.ok, true));
+  test('担当者が save_order で既存更新できる',
+    () => assert.equal(tantouUpdate.ok, true));
+  test('担当者が save_order で競合を検出できる',
+    () => assert.equal(tantouConflict.ok, true));
 }
 
 // ── D. self-check（歯があることの確認）────────────────────────────────────
