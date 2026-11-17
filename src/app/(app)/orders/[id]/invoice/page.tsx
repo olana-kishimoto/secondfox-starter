@@ -41,9 +41,7 @@ export default async function InvoicePage({
   const customer = Array.isArray(order.customers) ? (order.customers[0] as Customer) : order.customers;
 
   const items = [...(order.order_items ?? [])].sort((a, b) => a.line_no - b.line_no);
-  const subtotal = items.reduce((s, it) => s + (it.amount ?? 0), 0);
-  const tax = Math.floor(subtotal * 0.1);
-  const total = subtotal + tax;
+  const total = items.reduce((s, it) => s + (it.amount ?? 0), 0);
   const issuedDate = formatDateJP(new Date().toISOString().slice(0, 10));
 
   return (
@@ -110,7 +108,7 @@ export default async function InvoicePage({
           className="mb-6 flex items-baseline justify-between"
           style={{ border: "1px solid #ccc", padding: "10px 16px", background: "#f9f9f9" }}
         >
-          <span className="text-[10pt]">ご請求金額（税込）</span>
+          <span className="text-[10pt]">ご請求金額</span>
           <span className="text-[20pt] font-bold" style={{ color: "#111", fontVariantNumeric: "tabular-nums" }}>
             {formatYen(total)}
           </span>
@@ -151,16 +149,8 @@ export default async function InvoicePage({
           </tbody>
         </table>
 
-        {/* 小計・消費税・合計 */}
+        {/* 合計 */}
         <div className="mt-2 ml-auto" style={{ width: "240px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 10px", fontSize: "9pt" }}>
-            <span>小計</span>
-            <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatYen(subtotal)}</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 10px", fontSize: "9pt", color: "#555" }}>
-            <span>消費税（10%）</span>
-            <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatYen(tax)}</span>
-          </div>
           <div
             style={{
               display: "flex", justifyContent: "space-between",
@@ -168,7 +158,7 @@ export default async function InvoicePage({
               borderTop: "2px solid #111", marginTop: "4px",
             }}
           >
-            <span>合計（税込）</span>
+            <span>合計</span>
             <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatYen(total)}</span>
           </div>
         </div>
