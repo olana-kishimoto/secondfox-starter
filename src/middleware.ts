@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { getTrustedIP, ipAllowed, parseAccessIPs } from "@/lib/ipGate";
 
-// 関所は2段（IP 制御を設定すると3段目が先に入る）。
-// ０ IP ゲート：ACCESS_IPS を設定した場合のみ有効。soft は許可 IP を素通り、strict は非許可 IP を拒否。
+// 関所は2段（IP 制限を設定すると3段目が先に入る）。
+// ０ IP 制限：IP_RESTRICT_ENABLED=true のとき有効。IP_ALLOW の許可リスト外は即ブロック。入口コードとは完全に独立。
 // ① 入口：アクセスコード（このファイル）。玄関を隠し、第三者を画面に近づけない。本人確認ではない。
 // ② 内側：Supabase のログイン（lib/supabase/middleware.ts）。管理者が作ったアカウントだけが入れる。
 // データの分離は RLS が DB で強制する（supabase/migrations/0002_auth_rls.sql）。
@@ -12,8 +12,8 @@ import { getTrustedIP, ipAllowed, parseAccessIPs } from "@/lib/ipGate";
 //   ACCESS_KEYS          32桁のアクセスコード。カンマ区切りで複数可（「ラベル:コード」の形も可）。32桁でないものは無視。1本消せばそのコードだけ即失効。
 //   ACCESS_COOKIE_SECRET Cookie 署名用の長いランダム値（例：openssl rand -hex 32）。未設定なら誰も通れない。
 //   ACCESS_ENABLED       "true" のときだけ①の入口ゲートを有効にする（既定＝無効）。司令塔のセキュリティ設定でONにすると、司令塔が ACCESS_ENABLED=true とアクセスコード(ACCESS_KEYS)をVercelに設定する。
-//   ACCESS_IPS           許可する IP / CIDR のカンマ区切り（例：203.0.113.0/24,198.51.100.1）。空なら IP 制御なし。
-//   ACCESS_MODE          "soft"（既定）または "strict"。soft = 許可 IP は素通り。strict = 非許可 IP は拒否。
+//   IP_RESTRICT_ENABLED  "true" のとき IP 制限を有効にする（既定＝無効）。
+//   IP_ALLOW             許可する IP / CIDR のカンマ区切り（例：203.0.113.0/24,198.51.100.1）。空なら全ブロック。
 
 const KEY_LEN = 32;
 const COOKIE = "sf_ea";
@@ -39,31 +39,6 @@ const SELF_VERIFIED_PREFIXES = ["/api/webhooks/", "/api/cron/"];
 // （通すと未ログイン→/login へ 307 で結局弾かれる）。完全一致で判定する。
 const LOGIN_PATHS = new Set(["/login"]);
 
-function getAllowIPs(): string[] {
-  return (process.env.IP_ALLOW ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-}
-function ipv4ToInt(ip: string): number | null {
-  const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (!m) return null;
-  const o = m.slice(1).map(Number);
-  if (o.some((n) => n > 255)) return null;
-  return ((o[0] << 24) | (o[1] << 16) | (o[2] << 8) | o[3]) >>> 0;
-}
-function ipMatch(client: string, entry: string): boolean {
-  if (entry.includes("/")) {
-    const [net, bitsRaw] = entry.split("/");
-    const bits = Number(bitsRaw);
-    const ci = ipv4ToInt(client), ni = ipv4ToInt(net);
-    if (ci === null || ni === null || !Number.isInteger(bits) || bits < 0 || bits > 32) return false;
-    if (bits === 0) return true;
-    const mask = bits === 32 ? 0xffffffff : (0xffffffff << (32 - bits)) >>> 0;
-    return (ci & mask) === (ni & mask);
-  }
-  return client === entry.trim();
-}
-function clientIp(request: NextRequest): string {
-  return ((request.headers.get("x-forwarded-for") ?? "").split(",")[0] || "").trim();
-}
 function ipBlockPage(): Response {
   const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>利用できません</title>
 <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif;background:#edece7;color:#454545;display:flex;min-height:100svh;align-items:center;justify-content:center;padding:16px}.card{background:#fff;border:1px solid #e2e1db;border-radius:10px;padding:36px 32px;max-width:360px}h1{font-size:16px;font-weight:600;color:#1a1a1a;margin-bottom:8px}p{font-size:12px;color:#8a8a86;line-height:1.7}</style></head><body><div class="card"><h1>このネットワークからは利用できません</h1><p>許可されたネットワークからのみ利用できます。社内のネットワークからアクセスするか、ご案内した担当者にご確認ください。</p></div></body></html>`;
@@ -148,32 +123,20 @@ export async function middleware(request: NextRequest) {
   if (OPEN_PATHS.has(pathname) || OPEN_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
   if (SELF_VERIFIED_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
-  // IP制限（任意・既定OFF）。合言葉より外側。許可リストに無いネットワークはここで止める。機械向けの口は上で素通り済み。
+  // IP制限（任意・既定OFF・アクセスコードとは独立）。許可リストに無いネットワークはここで止める。機械向けの口は上で素通り済み。
   if (process.env.IP_RESTRICT_ENABLED === "true") {
-    const allow = getAllowIPs();
+    const allow = parseAccessIPs(process.env.IP_ALLOW);
     if (allow.length) {
-      const ip = clientIp(request);
-      if (!ip || !allow.some((e) => ipMatch(ip, e))) return ipBlockPage();
+      if (!ipAllowed(getTrustedIP(request), allow)) return ipBlockPage();
     }
   }
 
   const enabled = process.env.ACCESS_ENABLED === "true";
   const secret = process.env.ACCESS_COOKIE_SECRET ?? "";
 
-  // ０ IP ゲート（ACCESS_IPS が設定されており enabled のときだけ有効）
-  const ipList = parseAccessIPs(process.env.ACCESS_IPS);
-  let ipPassthrough = false;
-  if (ipList.length > 0 && enabled) {
-    const mode = process.env.ACCESS_MODE === "strict" ? "strict" : "soft";
-    const clientIP = getTrustedIP(request);
-    const ipOk = clientIP != null && ipAllowed(clientIP, ipList);
-    if (!ipOk && mode === "strict") return new Response(null, { status: 403 });
-    if (ipOk) ipPassthrough = true; // soft + 許可 IP：コードゲートを省く
-  }
-
-  // アクセスコードの入力画面と受け口（IP 素通りのときは / へリダイレクト）
+  // アクセスコードの入力画面と受け口
   if (pathname === "/__access") {
-    if (!enabled || ipPassthrough) return NextResponse.redirect(new URL("/", request.url));
+    if (!enabled) return NextResponse.redirect(new URL("/", request.url));
     if (request.method === "GET") return accessPage(safeNext(request.nextUrl.searchParams.get("next")), false);
     if (request.method !== "POST") return new Response(null, { status: 405 });
     const form = new URLSearchParams(await request.text());
@@ -194,10 +157,10 @@ export async function middleware(request: NextRequest) {
     return res;
   }
 
-  // ① 入口：署名つき Cookie があるか（IP 素通りなら省く）
+  // ① 入口：署名つき Cookie があるか
   const cookieVal = request.cookies.get(COOKIE)?.value ?? "";
   let passed: boolean;
-  if (!enabled || ipPassthrough) {
+  if (!enabled) {
     passed = true;
   } else if (!secret || !cookieVal) {
     passed = false; // secret 未設定または Cookie なし → 安全に弾く（クラッシュしない）
@@ -217,8 +180,7 @@ export async function middleware(request: NextRequest) {
 
   // ② 内側：ログイン。ログイン画面は確認を通さずそのまま開く。
   const res = LOGIN_PATHS.has(pathname) ? NextResponse.next() : await updateSession(request);
-  // IP 素通りのときは Cookie を貼らない（コードゲートを経由していない）
-  if (enabled && !ipPassthrough) res.cookies.set(COOKIE, cookieVal, cookieOptions);
+  if (enabled) res.cookies.set(COOKIE, cookieVal, cookieOptions);
   return res;
 }
 

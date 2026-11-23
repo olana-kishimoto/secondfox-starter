@@ -1,9 +1,5 @@
-// IP 許可リストの判定（入口のセキュリティコードと二段で効かせる）。
-// 環境変数
-//   ACCESS_IPS   : カンマ区切りの許可 IP / CIDR（空または未設定 → IP 制御なし）
-//   ACCESS_MODE  : "soft"（既定）または "strict"
-//     soft   = 許可 IP なら素通り、非許可ならコードゲートへ
-//     strict = 許可 IP 以外は拒否（コードでも入れない）
+// IP 許可リストの判定ユーティリティ（IP_RESTRICT_ENABLED / IP_ALLOW レイヤーで使用）。
+// アクセスコードゲートとは独立した単独レイヤーとして middleware.ts から呼ぶ。
 //
 // クライアント IP の取得は x-vercel-forwarded-for を使う。
 // x-forwarded-for の先頭は偽装可能なため使わない。
@@ -61,7 +57,7 @@ export function ipAllowed(ip: string | null | undefined, list: string[]): boolea
   return false;
 }
 
-// ACCESS_IPS 環境変数をパースし、有効なエントリの配列にする。
+// IP リスト文字列をパースし、有効なエントリの配列にする。
 // 空文字・空白のみのエントリは除外する（前後の空白はトリム）。
 export function parseAccessIPs(env: string | undefined): string[] {
   if (!env) return [];
