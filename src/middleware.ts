@@ -39,6 +39,37 @@ const SELF_VERIFIED_PREFIXES = ["/api/webhooks/", "/api/cron/"];
 // （通すと未ログイン→/login へ 307 で結局弾かれる）。完全一致で判定する。
 const LOGIN_PATHS = new Set(["/login"]);
 
+function getAllowIPs(): string[] {
+  return (process.env.IP_ALLOW ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+}
+function ipv4ToInt(ip: string): number | null {
+  const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return null;
+  const o = m.slice(1).map(Number);
+  if (o.some((n) => n > 255)) return null;
+  return ((o[0] << 24) | (o[1] << 16) | (o[2] << 8) | o[3]) >>> 0;
+}
+function ipMatch(client: string, entry: string): boolean {
+  if (entry.includes("/")) {
+    const [net, bitsRaw] = entry.split("/");
+    const bits = Number(bitsRaw);
+    const ci = ipv4ToInt(client), ni = ipv4ToInt(net);
+    if (ci === null || ni === null || !Number.isInteger(bits) || bits < 0 || bits > 32) return false;
+    if (bits === 0) return true;
+    const mask = bits === 32 ? 0xffffffff : (0xffffffff << (32 - bits)) >>> 0;
+    return (ci & mask) === (ni & mask);
+  }
+  return client === entry.trim();
+}
+function clientIp(request: NextRequest): string {
+  return ((request.headers.get("x-forwarded-for") ?? "").split(",")[0] || "").trim();
+}
+function ipBlockPage(): Response {
+  const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>利用できません</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif;background:#edece7;color:#454545;display:flex;min-height:100svh;align-items:center;justify-content:center;padding:16px}.card{background:#fff;border:1px solid #e2e1db;border-radius:10px;padding:36px 32px;max-width:360px}h1{font-size:16px;font-weight:600;color:#1a1a1a;margin-bottom:8px}p{font-size:12px;color:#8a8a86;line-height:1.7}</style></head><body><div class="card"><h1>このネットワークからは利用できません</h1><p>許可されたネットワークからのみ利用できます。社内のネットワークからアクセスするか、ご案内した担当者にご確認ください。</p></div></body></html>`;
+  return new Response(html, { status: 403, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
 function validKeys(): string[] {
   return (process.env.ACCESS_KEYS ?? "")
     .split(",")
@@ -116,6 +147,15 @@ export async function middleware(request: NextRequest) {
   // 機械向けの公開口は IP ゲートもコードゲートも通さない
   if (OPEN_PATHS.has(pathname) || OPEN_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
   if (SELF_VERIFIED_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
+
+  // IP制限（任意・既定OFF）。合言葉より外側。許可リストに無いネットワークはここで止める。機械向けの口は上で素通り済み。
+  if (process.env.IP_RESTRICT_ENABLED === "true") {
+    const allow = getAllowIPs();
+    if (allow.length) {
+      const ip = clientIp(request);
+      if (!ip || !allow.some((e) => ipMatch(ip, e))) return ipBlockPage();
+    }
+  }
 
   const enabled = process.env.ACCESS_ENABLED === "true";
   const secret = process.env.ACCESS_COOKIE_SECRET ?? "";
