@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMyPerms, can } from "@/lib/perm";
 import { redirect } from "@/lib/redirect";
+import { toUserMessage } from "@/lib/errors/db-error";
 
 export async function createRole(formData: FormData) {
   const { perms } = await getMyPerms();
@@ -15,7 +16,13 @@ export async function createRole(formData: FormData) {
 
   const sb = await createClient();
   const { data: role, error } = await sb.from("roles").insert({ name, is_system: false }).select("id").single();
-  if (error || !role) redirect("/settings/roles?error=作成に失敗しました（同じ名前が既にあります）");
+  if (error) {
+    const msg = error.code === "23505"
+      ? "その名前は既に使われています。別の名前にしてください"
+      : toUserMessage(error);
+    redirect(`/settings/roles?error=${msg}`);
+  }
+  if (!role) redirect("/settings/roles?error=作成できませんでした。もう一度お試しください");
 
   const { data: features } = await sb.from("features").select("key");
   if (features) {
@@ -41,7 +48,12 @@ export async function updateRoleName(formData: FormData) {
   if (role?.is_system) redirect(`/settings/roles?role=${roleId}&error=システム役割の名前は変更できません`);
 
   const { error } = await sb.from("roles").update({ name }).eq("id", roleId);
-  if (error) redirect(`/settings/roles?role=${roleId}&error=名前の変更に失敗しました`);
+  if (error) {
+    const msg = error.code === "23505"
+      ? "その名前は既に使われています。別の名前にしてください"
+      : toUserMessage(error);
+    redirect(`/settings/roles?role=${roleId}&error=${msg}`);
+  }
 
   revalidatePath("/settings/roles");
   redirect(`/settings/roles?role=${roleId}&msg=役割名を変更しました`);
@@ -62,7 +74,7 @@ export async function deleteRole(formData: FormData) {
   if ((count ?? 0) > 0) redirect("/settings/roles?error=この役割のユーザーがいるため削除できません。先に役割を変えてください");
 
   const { error } = await sb.from("roles").delete().eq("id", roleId);
-  if (error) redirect("/settings/roles?error=削除に失敗しました");
+  if (error) redirect(`/settings/roles?error=${toUserMessage(error)}`);
 
   revalidatePath("/settings/roles");
   redirect("/settings/roles?msg=役割を削除しました");
@@ -89,7 +101,7 @@ export async function savePermissions(formData: FormData) {
   });
 
   const { error } = await sb.from("role_permissions").upsert(upserts);
-  if (error) redirect(`/settings/roles?role=${roleId}&error=保存に失敗しました`);
+  if (error) redirect(`/settings/roles?role=${roleId}&error=${toUserMessage(error)}`);
 
   revalidatePath("/settings/roles");
   redirect(`/settings/roles?role=${roleId}&msg=権限を保存しました`);
