@@ -123,12 +123,10 @@ export async function middleware(request: NextRequest) {
   if (OPEN_PATHS.has(pathname) || OPEN_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
   if (SELF_VERIFIED_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
-  // IP制限（任意・既定OFF・アクセスコードとは独立）。許可リストに無いネットワークはここで止める。機械向けの口は上で素通り済み。
+  // IP制限（任意・既定OFF・アクセスコードとは独立）。ONなら許可リストが空でも全ブロック（fail-closed）。機械向けの口は上で素通り済み。
   if (process.env.IP_RESTRICT_ENABLED === "true") {
     const allow = parseAccessIPs(process.env.IP_ALLOW);
-    if (allow.length) {
-      if (!ipAllowed(getTrustedIP(request), allow)) return ipBlockPage();
-    }
+    if (!ipAllowed(getTrustedIP(request), allow)) return ipBlockPage();
   }
 
   const enabled = process.env.ACCESS_ENABLED === "true";
