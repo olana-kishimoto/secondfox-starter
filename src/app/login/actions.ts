@@ -20,6 +20,7 @@ export async function login(formData: FormData) {
   if (!email || !password) back(FAILED);
   const sb = await createClient();
   const { error } = await sb.auth.signInWithPassword({ email, password });
+  // 検査除外: 認証失敗の理由は区別して出さない（安全のため）
   if (error) {
     await new Promise((r) => setTimeout(r, 600)); // 総当たりを遅くする
     back(FAILED); // 理由（メールが無い／パスワード違い）は区別して出さない

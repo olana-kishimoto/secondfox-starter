@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { toUserMessage } from "@/lib/errors/db-error";
 
 export type SearchTemplate = {
   id: number;
@@ -32,7 +33,7 @@ export async function saveSearchTemplate(
   const { error } = await sb
     .from("search_templates")
     .upsert({ screen_key: screenKey, name: name.trim(), params }, { onConflict: "user_id,screen_key,name" });
-  if (error) return { error: "保存に失敗しました" };
+  if (error) return { error: toUserMessage(error) };
   revalidatePath("/");
   return {};
 }
@@ -40,7 +41,7 @@ export async function saveSearchTemplate(
 export async function deleteSearchTemplate(id: number): Promise<{ error?: string }> {
   const sb = await createClient();
   const { error } = await sb.from("search_templates").delete().eq("id", id);
-  if (error) return { error: "削除に失敗しました" };
+  if (error) return { error: toUserMessage(error) };
   revalidatePath("/");
   return {};
 }
