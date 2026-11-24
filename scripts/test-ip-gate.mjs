@@ -60,12 +60,12 @@ const mw = rd("src/middleware.ts");
 ok(mw.includes("getTrustedIP") && mw.includes("ipAllowed") && mw.includes("parseAccessIPs"), "ipGate の3関数を使う");
 ok(!mw.includes('x-forwarded-for"') && !mw.includes("x-forwarded-for'"), "middleware が x-forwarded-for を直接読まない（偽装可能）");
 ok(mw.includes("x-vercel-forwarded-for") || mw.includes("getTrustedIP"), "信頼できる IP 取得を使う（getTrustedIP 経由）");
-ok(mw.includes("ACCESS_MODE") && mw.includes('"strict"'), "ACCESS_MODE=strict の分岐がある");
-ok(mw.includes("ipPassthrough"), "IP 通過フラグで コードゲートを省く");
-ok(mw.includes("!ipOk && mode === \"strict\"") || (mw.includes("!ipOk") && mw.includes("strict")), "strict かつ IP 不一致は拒否");
-ok(mw.includes("ipPassthrough = true"), "許可 IP なら ipPassthrough を立てる");
-ok(mw.includes("!enabled || ipPassthrough)"), "コードゲート：IP 素通りなら Cookie チェックを省く");
-ok(mw.includes("!ipPassthrough") && mw.includes("res.cookies.set"), "IP 素通りのとき Cookie を貼らない");
+ok(mw.includes('IP_RESTRICT_ENABLED === "true"'), "IP制限は IP_RESTRICT_ENABLED === \"true\" のときだけ有効");
+ok(mw.includes("parseAccessIPs(process.env.IP_ALLOW)"), "許可リストは parseAccessIPs(process.env.IP_ALLOW) で読む");
+ok(mw.includes("ipAllowed(getTrustedIP(request), allow)"), "許可判定は ipAllowed(getTrustedIP(request), allow) で行う");
+ok(mw.includes("ipBlockPage()"), "許可リスト外は ipBlockPage で止めて即 return");
+ok(!mw.includes("ACCESS_MODE") && !mw.includes("ipPassthrough"), "IP制限とアクセスコードは独立（ACCESS_MODE / ipPassthrough は無い）");
+ok(mw.indexOf("process.env.IP_RESTRICT_ENABLED") < mw.indexOf("process.env.ACCESS_ENABLED"), "IP制限の判定はアクセスコードの判定より前に置かれている");
 
 // OPEN_PATHS / SELF_VERIFIED_PREFIXES は ipGate より前で return する
 const before = mw.slice(0, mw.indexOf("parseAccessIPs("));
