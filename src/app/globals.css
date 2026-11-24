@@ -218,3 +218,109 @@ button:disabled {
     print-color-adjust: exact;
   }
 }
+
+/* ============================================================
+   フォーム共通
+   .field       : ラベル + 入力欄の縦並びコンテナ
+   .field-row   : 2カラム横並び（スマホは1カラムに折り返す）
+   .form-width  : フォーム全体の最大幅制限
+   .form-actions: 保存ボタン行
+   button.primary / button.secondary: ロールページなど生の button に使うスタイル
+   .error       : フィールドエラー文字列
+   ============================================================ */
+.form-width {
+  max-width: 640px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.field > label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.field input,
+.field select,
+.field textarea {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: var(--paper);
+  color: var(--text);
+  width: 100%;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.field .hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 760px) {
+  .field-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+button.primary:hover {
+  background: var(--accent-2);
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 20px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+button.secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.error {
+  color: var(--bad);
+  font-size: 11px;
+}

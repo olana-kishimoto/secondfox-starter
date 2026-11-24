@@ -6,6 +6,7 @@ import { getMyPerms, can } from "@/lib/perm";
 import { redirect } from "@/lib/redirect";
 import { formatYen } from "@/lib/format";
 import { APP_NAME } from "@/lib/app-info";
+import { LinkButton } from "@/components/ui/Button";
 import { IconSearch } from "@/components/icons";
 
 export const metadata: Metadata = { title: `商品マスタ — ${APP_NAME}` };
@@ -35,6 +36,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
         eyebrow="Settings"
         title="商品マスタ"
         description="受注明細で選択できる商品の一覧です。"
+        right={can(perms, "products", "edit") ? <LinkButton href="/products/new">商品を登録する</LinkButton> : undefined}
       />
       <FlashMessage msg={sp.msg} error={sp.error} />
 
@@ -81,7 +83,11 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
             {rows.map((p) => (
               <tr key={p.id} className="hover:bg-base/50 transition-colors">
                 <td data-label="コード" className="font-mono text-muted">{p.code}</td>
-                <td data-label="商品名" className="font-medium">{p.name}</td>
+                <td data-label="商品名" className="font-medium">
+                  {can(perms, "products", "edit") ? (
+                    <a href={`/products/${p.id}`} className="hover:text-accent hover:underline">{p.name}</a>
+                  ) : p.name}
+                </td>
                 <td data-label="単価" className="num text-right">{formatYen(p.unit_price)}</td>
               </tr>
             ))}

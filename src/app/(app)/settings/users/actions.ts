@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getMyPerms, can } from "@/lib/perm";
 import { redirect } from "@/lib/redirect";
+import { toUserMessage } from "@/lib/errors/db-error";
 
 export type UserActionState = {
   ok: boolean;
@@ -73,7 +74,7 @@ export async function changeRole(formData: FormData) {
   }
 
   const { error } = await sb.from("profiles").update({ role_id: roleId }).eq("user_id", userId);
-  if (error) redirect("/settings/users?error=役割の変更に失敗しました");
+  if (error) redirect(`/settings/users?error=${toUserMessage(error)}`);
 
   revalidatePath("/settings/users");
   redirect("/settings/users?msg=役割を変更しました");
