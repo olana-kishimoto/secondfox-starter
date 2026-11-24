@@ -39,7 +39,8 @@ export async function addUser(_: UserActionState, formData: FormData): Promise<U
     password: tmpPassword,
     email_confirm: true,
   });
-  if (error || !created.user) return { ok: false, error: error?.message ?? "作成に失敗しました" };
+  if (error) return { ok: false, error: toUserMessage(error) };
+  if (!created.user) return { ok: false, error: "作成に失敗しました" };
 
   const sb = await createClient();
   await sb.from("profiles").upsert({ user_id: created.user.id, role_id: roleId, email, active: true });
@@ -142,7 +143,7 @@ export async function resetPassword(_: UserActionState, formData: FormData): Pro
 
   const tmpPassword = generateTempPassword();
   const { error } = await admin.auth.admin.updateUserById(userId, { password: tmpPassword });
-  if (error) return { ok: false, error: "パスワードの再発行に失敗しました" };
+  if (error) return { ok: false, error: toUserMessage(error) };
 
   return { ok: true, tmpPassword, email };
 }
