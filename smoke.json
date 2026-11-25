@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "login": { "path": "/login" },
+  "screens": [
+    {
+      "name": "案件一覧",
+      "path": "/",
+      "kind": "list",
+      "create": {
+        "path": "/cases/new",
+        "fields": [
+          { "label": "件名", "value": "【点検】テスト案件" }
+        ],
+        "submit": "登録"
+      },
+      "expectAfterCreate": "【点検】テスト案件",
+      "delete": true
+    },
+    {
+      "name": "顧客マスタ",
+      "path": "/master",
+      "kind": "list",
+      "create": {
+        "path": "/master/new",
+        "fields": [
+          { "label": "会社名", "value": "【点検】テスト会社" }
+        ],
+        "submit": "登録"
+      },
+      "expectAfterCreate": "【点検】テスト会社",
+      "delete": true
+    },
+    {
+      "name": "案件登録",
+      "path": "/cases/new",
+      "kind": "form"
+    },
+    {
+      "name": "顧客マスタ登録",
+      "path": "/master/new",
+      "kind": "form"
+    },
+    {
+      "name": "受注一覧",
+      "path": "/orders",
+      "kind": "list"
+    },
+    {
+      "name": "受注登録",
+      "path": "/orders/new",
+      "kind": "form"
+    },
+    {
+      "name": "商品マスタ",
+      "path": "/products",
+      "kind": "list",
+      "create": {
+        "path": "/products/new",
+        "fields": [
+          { "label": "商品コード", "value": "SMOKE001" },
+          { "label": "商品名", "value": "【点検】テスト商品" },
+          { "label": "単価（円）", "value": "1000" }
+        ],
+        "submit": "登録"
+      },
+      "expectAfterCreate": "【点検】テスト商品",
+      "delete": true
+    },
+    {
+      "name": "商品マスタ登録",
+      "path": "/products/new",
+      "kind": "form"
+    },
+    {
+      "name": "権限マスタ",
+      "path": "/settings/roles",
+      "kind": "view"
+    },
+    {
+      "name": "ユーザー管理",
+      "path": "/settings/users",
+      "kind": "view"
+    },
+    {
+      "name": "アカウント",
+      "path": "/account",
+      "kind": "view"
+    }
+  ]
+}
