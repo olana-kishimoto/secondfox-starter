@@ -88,6 +88,10 @@ SecondFox がお客様のシステムを新規作成するときの「元」に�
 テスト：`npm test`（境界チェック・権限判定・IP ゲート・ミドルウェア・RSC 境界・フォーム契約・マスタ CRUD の全テストをまとめて実行）。新しいテストスクリプトを追加したときは `package.json` の `"test"` にも必ず追記すること。
 RLS 否定テスト（`npm run test:rls`）は pglite ベースの独立ジョブ（Docker 不要）。CI は `.github/workflows/rls.yml` が担当する。
 
+## 画面を追加・変更したら smoke.json も更新する
+
+src/app/(app) 配下に画面（page.tsx）を追加・変更したときは、リポジトリ直下の smoke.json も同じ変更に含める。smoke.json には全一覧ページのパス・フォームのフィールドラベル・作成後に一覧に出る文字列を記述する。npm test の test:smoke-contract がこの整合性を検査するので、テストが通る状態を保つこと。
+
 ## 開発
 
 ```
